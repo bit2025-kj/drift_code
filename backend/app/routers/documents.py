@@ -1,0 +1,301 @@
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
+from pydantic import BaseModel
+from app.database import get_db
+from app.models import Document, Favorite, Download, EducationLevel, Classe, Matiere, TypeExamen, User
+from app.schemas.document import DocumentOut, DocumentListResponse, FavoriteToggleResponse
+from app.utils.auth import get_current_user
+from app.config import settings
+import asyncio, uuid, os, shutil
+
+
+class RateRequest(BaseModel):
+    rating: float  # 1.0 à 5.0
+
+router = APIRouter(prefix="/documents", tags=["Banque de Sujets"])
+
+
+_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+
+
+def _thumb_path(doc_id: str) -> str:
+    return os.path.join(settings.UPLOAD_DIR, "thumbnails", f"{doc_id}.jpg")
+
+
+def _generate_thumbnail_sync(pdf_path: str, thumb_path: str) -> None:
+    try:
+        import pypdfium2 as pdfium
+        doc = pdfium.PdfDocument(pdf_path)
+        page = doc[0]
+        width = page.get_width()
+        scale = 300.0 / width if width > 0 else 1.0
+        bitmap = page.render(scale=scale, rotation=0)
+        bitmap.to_pil().save(thumb_path, "JPEG", quality=85)
+        doc.close()
+    except Exception:
+        pass
+
+
+def _enrich(doc: Document) -> DocumentOut:
+    out = DocumentOut.model_validate(doc)
+    out.level_name = doc.level.name if doc.level else None
+    out.classe_name = doc.classe.name if doc.classe else None
+    out.matiere_name = doc.matiere.name if doc.matiere else None
+    out.type_examen_name = doc.type_examen.name if doc.type_examen else None
+    if doc.file_url:
+        ext = os.path.splitext(doc.file_url)[1].lower()
+        out.file_type = 'image' if ext in _IMAGE_EXTS else 'pdf'
+        if out.file_type == 'pdf' and os.path.exists(_thumb_path(doc.id)):
+            out.thumbnail_url = f"/uploads/thumbnails/{doc.id}.jpg"
+    return out
+
+
+@router.get("", response_model=DocumentListResponse)
+async def list_documents(
+    db: AsyncSession = Depends(get_db),
+    level_id: int | None = Query(None),
+    classe_id: int | None = Query(None),
+    matiere_id: int | None = Query(None),
+    type_examen_id: int | None = Query(None),
+    annee: int | None = Query(None),
+    has_corrige: bool | None = Query(None),
+    is_official: bool | None = Query(None),
+    q: str | None = Query(None),
+    sort_by: str = Query("recent"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=50),
+):
+    stmt = (
+        select(Document)
+        .options(
+            selectinload(Document.level),
+            selectinload(Document.classe),
+            selectinload(Document.matiere),
+            selectinload(Document.type_examen),
+        )
+        .where(Document.is_approved == True)
+    )
+
+    if level_id:
+        stmt = stmt.where(Document.level_id == level_id)
+    if classe_id:
+        stmt = stmt.where(Document.classe_id == classe_id)
+    if matiere_id:
+        stmt = stmt.where(Document.matiere_id == matiere_id)
+    if type_examen_id:
+        stmt = stmt.where(Document.type_examen_id == type_examen_id)
+    if annee:
+        stmt = stmt.where(Document.annee == annee)
+    if has_corrige is not None:
+        stmt = stmt.where(Document.has_corrige == has_corrige)
+    if is_official is not None:
+        stmt = stmt.where(Document.is_official == is_official)
+    if q:
+        stmt = stmt.where(or_(
+            Document.title.ilike(f"%{q}%"),
+            Document.description.ilike(f"%{q}%"),
+        ))
+
+    if sort_by == "popular":
+        stmt = stmt.order_by(Document.downloads_count.desc())
+    elif sort_by == "rating":
+        stmt = stmt.order_by(Document.rating.desc())
+    else:
+        stmt = stmt.order_by(Document.created_at.desc())
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await db.execute(count_stmt)).scalar()
+
+    stmt = stmt.offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(stmt)
+    docs = result.scalars().all()
+
+    return DocumentListResponse(total=total, page=page, per_page=per_page, items=[_enrich(d) for d in docs])
+
+
+@router.get("/trending", response_model=list[DocumentOut])
+async def trending_documents(db: AsyncSession = Depends(get_db), limit: int = 10):
+    stmt = (
+        select(Document)
+        .options(
+            selectinload(Document.level), selectinload(Document.classe),
+            selectinload(Document.matiere), selectinload(Document.type_examen),
+        )
+        .where(Document.is_approved == True)
+        .order_by(Document.downloads_count.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return [_enrich(d) for d in result.scalars().all()]
+
+
+@router.get("/{document_id}", response_model=DocumentOut)
+async def get_document(document_id: str, db: AsyncSession = Depends(get_db)):
+    stmt = (
+        select(Document)
+        .options(
+            selectinload(Document.level), selectinload(Document.classe),
+            selectinload(Document.matiere), selectinload(Document.type_examen),
+        )
+        .where(Document.id == document_id)
+    )
+    result = await db.execute(stmt)
+    doc = result.scalar_one_or_none()
+    if not doc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    doc.views_count += 1
+    await db.commit()
+    return _enrich(doc)
+
+
+@router.post("/{document_id}/download")
+async def download_document(
+    document_id: str,
+    is_corrige: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Document introuvable")
+
+    dl = Download(user_id=current_user.id, document_id=document_id, is_corrige=is_corrige)
+    db.add(dl)
+    doc.downloads_count += 1
+    current_user.points += 5
+    await db.commit()
+
+    file_url = doc.corrige_url if is_corrige else doc.file_url
+    return {"file_url": file_url, "title": doc.title}
+
+
+@router.post("/{document_id}/favorite", response_model=FavoriteToggleResponse)
+async def toggle_favorite(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Favorite).where(Favorite.user_id == current_user.id, Favorite.document_id == document_id)
+    )
+    fav = result.scalar_one_or_none()
+    if fav:
+        await db.delete(fav)
+        await db.commit()
+        return FavoriteToggleResponse(is_favorite=False, message="Retiré des favoris")
+    else:
+        db.add(Favorite(user_id=current_user.id, document_id=document_id))
+        await db.commit()
+        return FavoriteToggleResponse(is_favorite=True, message="Ajouté aux favoris")
+
+
+@router.post("/{document_id}/rate")
+async def rate_document(
+    document_id: str,
+    data: RateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not (1.0 <= data.rating <= 5.0):
+        raise HTTPException(status_code=400, detail="La note doit être entre 1 et 5")
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    # Moyenne glissante sans table dédiée
+    doc.rating = round(
+        (doc.rating * doc.ratings_count + data.rating) / (doc.ratings_count + 1), 2
+    )
+    doc.ratings_count += 1
+    await db.commit()
+    return {"rating": doc.rating, "ratings_count": doc.ratings_count}
+
+
+@router.post("/upload", response_model=DocumentOut, status_code=201)
+async def upload_document(
+    title: str = Form(...),
+    description: str = Form(None),
+    level_id: int = Form(...),
+    classe_id: int = Form(None),
+    matiere_id: int = Form(None),
+    type_examen_id: int = Form(None),
+    annee: int = Form(None),
+    session: str = Form(None),
+    is_official: bool = Form(False),
+    file: UploadFile = File(...),
+    corrige: UploadFile = File(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    upload_dir = os.path.join(settings.UPLOAD_DIR, "documents")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file_id = str(uuid.uuid4())
+    ext = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
+    dest = os.path.join(upload_dir, f"{file_id}{ext}")
+    size = 0
+    with open(dest, "wb") as f:
+        chunk = await file.read(max_bytes + 1)
+        if len(chunk) > max_bytes:
+            os.remove(dest)
+            raise HTTPException(status_code=413, detail=f"Fichier trop volumineux (max {settings.MAX_FILE_SIZE_MB} Mo)")
+        f.write(chunk)
+        size = len(chunk)
+
+    file_url = f"/uploads/documents/{file_id}{ext}"
+
+    # Generate thumbnail for PDFs (fire-and-forget background task)
+    if ext.lower() == '.pdf':
+        thumb_dir = os.path.join(settings.UPLOAD_DIR, "thumbnails")
+        os.makedirs(thumb_dir, exist_ok=True)
+        asyncio.create_task(
+            asyncio.to_thread(_generate_thumbnail_sync, dest, os.path.join(thumb_dir, f"{file_id}.jpg"))
+        )
+
+    corrige_url = None
+    has_corrige = False
+
+    if corrige and corrige.filename:
+        c_ext = os.path.splitext(corrige.filename)[1]
+        c_dest = os.path.join(upload_dir, f"{file_id}_corrige{c_ext}")
+        with open(c_dest, "wb") as f:
+            f.write(await corrige.read(max_bytes + 1))
+        corrige_url = f"/uploads/documents/{file_id}_corrige{c_ext}"
+        has_corrige = True
+
+    doc = Document(
+        id=file_id,
+        title=title,
+        description=description,
+        level_id=level_id,
+        classe_id=classe_id,
+        matiere_id=matiere_id,
+        type_examen_id=type_examen_id,
+        annee=annee,
+        session=session,
+        is_official=is_official,
+        file_url=file_url,
+        corrige_url=corrige_url,
+        has_corrige=has_corrige,
+        file_size_kb=size // 1024,
+        uploaded_by=current_user.id,
+        is_approved=True,
+    )
+    db.add(doc)
+    await db.commit()
+
+    result = await db.execute(
+        select(Document)
+        .options(
+            selectinload(Document.level), selectinload(Document.classe),
+            selectinload(Document.matiere), selectinload(Document.type_examen),
+        )
+        .where(Document.id == doc.id)
+    )
+    return _enrich(result.scalar_one())

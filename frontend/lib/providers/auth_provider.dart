@@ -1,0 +1,116 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nafa_edu/core/api/api_client.dart';
+import 'package:nafa_edu/core/api/api_endpoints.dart';
+import 'package:nafa_edu/models/user_model.dart';
+
+enum AuthStatus { loading, authenticated, unauthenticated }
+
+class AuthState {
+  final AuthStatus status;
+  final UserModel? user;
+  final String? error;
+
+  const AuthState({required this.status, this.user, this.error});
+
+  AuthState copyWith({AuthStatus? status, UserModel? user, String? error}) =>
+      AuthState(status: status ?? this.status, user: user ?? this.user, error: error);
+}
+
+class AuthNotifier extends StateNotifier<AuthState> {
+  AuthNotifier() : super(const AuthState(status: AuthStatus.loading)) {
+    _checkAuth();
+  }
+
+  final _api = ApiClient.instance;
+
+  Future<void> _checkAuth() async {
+    final loggedIn = await _api.isLoggedIn;
+    if (loggedIn) {
+      try {
+        final res = await _api.dio.get(ApiEndpoints.me);
+        state = AuthState(status: AuthStatus.authenticated, user: UserModel.fromJson(res.data));
+      } catch (_) {
+        state = const AuthState(status: AuthStatus.unauthenticated);
+      }
+    } else {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+    }
+  }
+
+  Future<bool> login(String email, String password) async {
+    try {
+      final res = await _api.dio.post(ApiEndpoints.login, data: {
+        'email': email,
+        'password': password,
+      });
+      await _api.saveTokens(
+        accessToken: res.data['access_token'],
+        refreshToken: res.data['refresh_token'],
+        userId: res.data['user_id'],
+        userName: res.data['full_name'],
+        isTeacher: res.data['is_teacher'],
+      );
+      await _checkAuth();
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: _parseError(e));
+      return false;
+    }
+  }
+
+  Future<bool> register({
+    required String fullName,
+    required String email,
+    required String password,
+    String? phone,
+    int? levelId,
+    int? classeId,
+    String? ville,
+  }) async {
+    try {
+      final res = await _api.dio.post(ApiEndpoints.register, data: {
+        'full_name': fullName,
+        'email': email,
+        'password': password,
+        if (phone != null) 'phone': phone,
+        if (levelId != null) 'level_id': levelId,
+        if (classeId != null) 'classe_id': classeId,
+        if (ville != null) 'ville': ville,
+      });
+      await _api.saveTokens(
+        accessToken: res.data['access_token'],
+        refreshToken: res.data['refresh_token'],
+        userId: res.data['user_id'],
+        userName: res.data['full_name'],
+        isTeacher: res.data['is_teacher'],
+      );
+      await _checkAuth();
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: _parseError(e));
+      return false;
+    }
+  }
+
+  Future<void> refreshUser() => _checkAuth();
+
+  Future<void> logout() async {
+    try {
+      await _api.dio.post(ApiEndpoints.logout);
+    } catch (_) {}
+    await _api.clearTokens();
+    state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  String _parseError(dynamic e) {
+    try {
+      final data = (e as dynamic).response?.data;
+      if (data is Map && data['detail'] != null) return data['detail'].toString();
+    } catch (_) {}
+    return 'Une erreur est survenue. Vérifiez votre connexion.';
+  }
+}
+
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
+  (_) => AuthNotifier(),
+);
