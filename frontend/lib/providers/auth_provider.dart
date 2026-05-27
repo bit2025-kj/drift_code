@@ -18,6 +18,9 @@ class AuthState {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier() : super(const AuthState(status: AuthStatus.loading)) {
+    _api.onSessionExpired = () {
+      logoutLocal();
+    };
     _checkAuth();
   }
 
@@ -94,12 +97,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> refreshUser() => _checkAuth();
 
+  /// Déconnexion locale sans appel API (utilisé lors d'expiration de session)
+  Future<void> logoutLocal() async {
+    await _api.clearTokens();
+    state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
   Future<void> logout() async {
     try {
       await _api.dio.post(ApiEndpoints.logout);
     } catch (_) {}
-    await _api.clearTokens();
-    state = const AuthState(status: AuthStatus.unauthenticated);
+    await logoutLocal();
   }
 
   String _parseError(dynamic e) {

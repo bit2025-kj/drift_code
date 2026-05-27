@@ -11,6 +11,7 @@ import 'package:nafa_edu/providers/education_provider.dart';
 import 'package:nafa_edu/providers/quiz_provider.dart';
 import 'package:nafa_edu/screens/quiz/quiz_history_screen.dart';
 import 'package:nafa_edu/screens/quiz/quiz_session_screen.dart';
+import 'package:nafa_edu/widgets/network_error_widget.dart';
 
 class QuizScreen extends ConsumerWidget {
   const QuizScreen({super.key});
@@ -137,19 +138,49 @@ class QuizScreen extends ConsumerWidget {
 
   Widget _buildInProgressSection(BuildContext context, WidgetRef ref) {
     final sessionsAsync = ref.watch(mySessionsProvider);
-    return sessionsAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (sessions) {
-        final inProgress = sessions.where((s) => !s.isCompleted).toList();
-        if (inProgress.isEmpty) return const SizedBox.shrink();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Reprendre un quiz',
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 10),
-            SizedBox(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Quiz en cours',
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        sessionsAsync.when(
+          loading: () => const SizedBox(
+              height: 80, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+          error: (e, _) => NetworkErrorWidget(
+              error: e,
+              compact: true,
+              onRetry: () => ref.invalidate(mySessionsProvider)),
+          data: (sessions) {
+            final inProgress = sessions.where((s) => !s.isCompleted).toList();
+            if (inProgress.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.play_circle_outline_rounded,
+                        size: 36, color: AppColors.textHint),
+                    const SizedBox(height: 8),
+                    Text('Aucun quiz en cours',
+                        style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary)),
+                    const SizedBox(height: 4),
+                    Text('Lance un quiz depuis le bouton ci-dessus',
+                        style: GoogleFonts.inter(
+                            fontSize: 11, color: AppColors.textHint)),
+                  ],
+                ),
+              );
+            }
+            return SizedBox(
               height: 116,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
@@ -160,11 +191,11 @@ class QuizScreen extends ConsumerWidget {
                   return _InProgressCard(session: s, color: colors[i % colors.length]);
                 },
               ),
-            ),
-            const SizedBox(height: 20),
-          ],
-        );
-      },
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
     );
   }
 
@@ -172,36 +203,77 @@ class QuizScreen extends ConsumerWidget {
 
   Widget _buildHistorySection(BuildContext context, WidgetRef ref) {
     final historyAsync = ref.watch(localQuizHistoryProvider);
-    return historyAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (entries) {
-        if (entries.isEmpty) return const SizedBox.shrink();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Text('Mon historique',
-                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              GestureDetector(
-                onTap: () => Navigator.push(
-                    context, MaterialPageRoute(builder: (_) => const QuizHistoryScreen())),
-                child: Text('Voir tout',
-                    style: GoogleFonts.inter(
-                        fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-            const SizedBox(height: 10),
-            ...entries.take(3).map((e) => _HistoryCard(
-                  entry: e,
-                  onTap: () => Navigator.push(context,
-                      MaterialPageRoute(
-                          builder: (_) => QuizHistoryScreen(focusId: e.sessionId))),
-                )),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Text('Mon historique',
+              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700)),
+          const Spacer(),
+          historyAsync.maybeWhen(
+            data: (entries) => entries.isNotEmpty
+                ? GestureDetector(
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const QuizHistoryScreen())),
+                    child: Text('Voir tout',
+                        style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600)),
+                  )
+                : const SizedBox.shrink(),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        historyAsync.when(
+          loading: () => const SizedBox(
+              height: 80, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+          error: (e, _) => NetworkErrorWidget(
+              error: e,
+              compact: true,
+              onRetry: () => ref.invalidate(localQuizHistoryProvider)),
+          data: (entries) {
+            if (entries.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.history_rounded, size: 36, color: AppColors.textHint),
+                    const SizedBox(height: 8),
+                    Text('Aucun quiz terminé',
+                        style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary)),
+                    const SizedBox(height: 4),
+                    Text('Tes résultats apparaîtront ici après chaque quiz',
+                        style: GoogleFonts.inter(
+                            fontSize: 11, color: AppColors.textHint)),
+                  ],
+                ),
+              );
+            }
+            return Column(
+              children: [
+                ...entries.take(3).map((e) => _HistoryCard(
+                      entry: e,
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => QuizHistoryScreen(focusId: e.sessionId))),
+                    )),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 

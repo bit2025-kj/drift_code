@@ -59,7 +59,7 @@ class SyncService {
       try {
         final answers = jsonDecode(session.answersJson) as Map<String, dynamic>;
         await ApiClient.instance.dio.post(
-          ApiEndpoints.submitSession(session.quizId),
+          ApiEndpoints.submitSession(session.id),
           data: {'session_id': session.id, 'answers': answers},
         );
         await localDb.markSessionSynced(session.id);

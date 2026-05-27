@@ -8,12 +8,13 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.models import Discussion, DiscussionComment, ForumCategory, User
+from app.models import Discussion, DiscussionComment, ForumCategory, User, DiscussionLike, CommentLike
 from app.schemas.forum import (
     DiscussionCreate, CommentCreate, DiscussionOut, DiscussionDetail,
     ForumStats, AuthorOut, CommentOut,
 )
-from app.utils.auth import get_current_user
+from app.utils.auth import get_current_user, get_optional_user
+from app.utils.notify import push_notif
 
 router = APIRouter(prefix="/forum", tags=["Forum"])
 
@@ -22,8 +23,8 @@ def _author(user: User) -> AuthorOut:
     return AuthorOut(id=user.id, full_name=user.full_name, avatar_url=user.avatar_url, points=user.points)
 
 
-def _serialize_comment(c: DiscussionComment) -> CommentOut:
-    replies = [_serialize_comment(r) for r in (c.replies or []) if r.is_active]
+def _serialize_comment(c: DiscussionComment, liked_ids: set[str] = frozenset()) -> CommentOut:
+    replies = [_serialize_comment(r, liked_ids) for r in (c.replies or []) if r.is_active]
     return CommentOut(
         id=c.id,
         content=c.content,
@@ -34,6 +35,7 @@ def _serialize_comment(c: DiscussionComment) -> CommentOut:
         media_urls=c.media_urls or [],
         parent_id=c.parent_id,
         replies=replies,
+        liked_by_me=c.id in liked_ids,
     )
 
 
@@ -76,6 +78,7 @@ async def list_categories(db: AsyncSession = Depends(get_db)):
 @router.get("", response_model=list[DiscussionOut])
 async def list_discussions(
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
     category_id: int | None = Query(None),
     matiere_id: int | None = Query(None),
     q: str | None = Query(None),
@@ -103,6 +106,17 @@ async def list_discussions(
     result = await db.execute(stmt)
     discussions = result.scalars().all()
 
+    liked_ids: set[str] = set()
+    if current_user and discussions:
+        disc_ids = [d.id for d in discussions]
+        likes_result = await db.execute(
+            select(DiscussionLike.discussion_id).where(
+                DiscussionLike.user_id == current_user.id,
+                DiscussionLike.discussion_id.in_(disc_ids),
+            )
+        )
+        liked_ids = {row[0] for row in likes_result.all()}
+
     return [
         DiscussionOut(
             **{k: getattr(d, k) for k in ["id", "title", "content", "views_count", "likes_count", "comments_count", "is_pinned", "is_resolved", "created_at"]},
@@ -110,6 +124,7 @@ async def list_discussions(
             category_name=d.category.name if d.category else None,
             matiere_name=d.matiere.name if d.matiere else None,
             media_urls=d.media_urls or [],
+            liked_by_me=d.id in liked_ids,
         )
         for d in discussions
     ]
@@ -144,7 +159,11 @@ async def create_discussion(
 
 
 @router.get("/{discussion_id}", response_model=DiscussionDetail)
-async def get_discussion(discussion_id: str, db: AsyncSession = Depends(get_db)):
+async def get_discussion(
+    discussion_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
     stmt = (
         select(Discussion)
         .options(
@@ -163,8 +182,31 @@ async def get_discussion(discussion_id: str, db: AsyncSession = Depends(get_db))
     disc.views_count += 1
     await db.commit()
 
+    disc_liked = False
+    liked_comment_ids: set[str] = set()
+    if current_user:
+        dl = (await db.execute(
+            select(DiscussionLike).where(
+                DiscussionLike.user_id == current_user.id,
+                DiscussionLike.discussion_id == discussion_id,
+            )
+        )).scalar_one_or_none()
+        disc_liked = dl is not None
+
+        all_comment_ids = [c.id for c in disc.comments] + [
+            r.id for c in disc.comments for r in (c.replies or [])
+        ]
+        if all_comment_ids:
+            cl_result = await db.execute(
+                select(CommentLike.comment_id).where(
+                    CommentLike.user_id == current_user.id,
+                    CommentLike.comment_id.in_(all_comment_ids),
+                )
+            )
+            liked_comment_ids = {row[0] for row in cl_result.all()}
+
     top_level = [c for c in disc.comments if not c.parent_id and c.is_active]
-    comments = [_serialize_comment(c) for c in top_level]
+    comments = [_serialize_comment(c, liked_comment_ids) for c in top_level]
 
     return DiscussionDetail(
         **{k: getattr(disc, k) for k in ["id", "title", "content", "views_count", "likes_count", "comments_count", "is_pinned", "is_resolved", "created_at"]},
@@ -172,6 +214,7 @@ async def get_discussion(discussion_id: str, db: AsyncSession = Depends(get_db))
         category_name=disc.category.name if disc.category else None,
         matiere_name=disc.matiere.name if disc.matiere else None,
         media_urls=disc.media_urls or [],
+        liked_by_me=disc_liked,
         comments=comments,
     )
 
@@ -196,6 +239,14 @@ async def add_comment(
     disc = disc_result.scalar_one_or_none()
     if disc:
         disc.comments_count += 1
+        await push_notif(
+            db, disc.user_id,
+            type="forum_comment",
+            title="Nouveau commentaire",
+            body=f"{current_user.full_name} a commenté votre publication « {disc.title[:60]} »",
+            data={"discussion_id": discussion_id, "discussion_title": disc.title},
+            exclude_user_id=current_user.id,
+        )
     current_user.points += 10
     await db.commit()
     return {"message": "Commentaire ajouté", "id": comment.id}
@@ -211,9 +262,33 @@ async def like_discussion(
     disc = result.scalar_one_or_none()
     if not disc:
         raise HTTPException(status_code=404, detail="Discussion introuvable")
-    disc.likes_count += 1
+
+    existing = (await db.execute(
+        select(DiscussionLike).where(
+            DiscussionLike.user_id == current_user.id,
+            DiscussionLike.discussion_id == discussion_id,
+        )
+    )).scalar_one_or_none()
+
+    if existing:
+        await db.delete(existing)
+        disc.likes_count = max(0, disc.likes_count - 1)
+        liked = False
+    else:
+        db.add(DiscussionLike(user_id=current_user.id, discussion_id=discussion_id))
+        disc.likes_count += 1
+        liked = True
+        await push_notif(
+            db, disc.user_id,
+            type="forum_like",
+            title="J'aime sur votre publication",
+            body=f"{current_user.full_name} a aimé votre publication « {disc.title[:60]} »",
+            data={"discussion_id": discussion_id, "discussion_title": disc.title},
+            exclude_user_id=current_user.id,
+        )
+
     await db.commit()
-    return {"likes_count": disc.likes_count}
+    return {"liked": liked, "likes_count": disc.likes_count}
 
 
 @router.post("/{discussion_id}/comments/{comment_id}/like")
@@ -232,9 +307,25 @@ async def like_comment(
     comment = result.scalar_one_or_none()
     if not comment:
         raise HTTPException(status_code=404, detail="Commentaire introuvable")
-    comment.likes_count += 1
+
+    existing = (await db.execute(
+        select(CommentLike).where(
+            CommentLike.user_id == current_user.id,
+            CommentLike.comment_id == comment_id,
+        )
+    )).scalar_one_or_none()
+
+    if existing:
+        await db.delete(existing)
+        comment.likes_count = max(0, comment.likes_count - 1)
+        liked = False
+    else:
+        db.add(CommentLike(user_id=current_user.id, comment_id=comment_id))
+        comment.likes_count += 1
+        liked = True
+
     await db.commit()
-    return {"likes_count": comment.likes_count}
+    return {"liked": liked, "likes_count": comment.likes_count}
 
 
 @router.patch("/{discussion_id}/comments/{comment_id}/solution")

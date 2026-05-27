@@ -7,6 +7,9 @@ class ApiClient {
   late final Dio _dio;
   final _storage = const FlutterSecureStorage();
 
+  // Callback d'expiration de session
+  void Function()? onSessionExpired;
+
   ApiClient._() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConstants.baseUrl,
@@ -24,7 +27,12 @@ class ApiClient {
         handler.next(options);
       },
       onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
+        final path = error.requestOptions.path;
+        final isAuthRequest = path.contains('/auth/refresh') ||
+                              path.contains('/auth/login') ||
+                              path.contains('/auth/register');
+
+        if (error.response?.statusCode == 401 && !isAuthRequest) {
           final refreshed = await _refreshToken();
           if (refreshed) {
             final token = await _storage.read(key: AppConstants.keyAccessToken);
@@ -32,6 +40,9 @@ class ApiClient {
             final response = await _dio.fetch(error.requestOptions);
             handler.resolve(response);
             return;
+          } else {
+            // Signalement de l'expiration de session
+            onSessionExpired?.call();
           }
         }
         handler.next(error);

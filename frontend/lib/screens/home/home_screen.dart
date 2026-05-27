@@ -12,17 +12,10 @@ import 'package:nafa_edu/providers/education_provider.dart';
 import 'package:nafa_edu/screens/banque/document_detail_screen.dart';
 import 'package:nafa_edu/screens/main_shell.dart';
 import 'package:nafa_edu/screens/home/publish_sheet.dart';
+import 'package:nafa_edu/providers/notification_provider.dart';
 import 'package:nafa_edu/screens/ai_chat/ai_chat_screen.dart';
-
-// Notifications count — returns 0 on any failure (endpoint not yet implemented)
-final notificationsCountProvider = FutureProvider<int>((ref) async {
-  try {
-    final res = await ApiClient.instance.dio.get('/notifications/unread-count');
-    return (res.data['count'] as int?) ?? 0;
-  } catch (_) {
-    return 0;
-  }
-});
+import 'package:nafa_edu/screens/notifications/notification_screen.dart';
+import 'package:nafa_edu/widgets/network_error_widget.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -34,7 +27,7 @@ class HomeScreen extends ConsumerWidget {
     final newDocs = ref.watch(newDocumentsProvider);
     final recentDownloads = ref.watch(myRecentDownloadsProvider);
     final levelsAsync = ref.watch(levelsProvider);
-    final notifCount = ref.watch(notificationsCountProvider).valueOrNull ?? 0;
+    final notifCount = ref.watch(unreadCountProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -61,7 +54,7 @@ class HomeScreen extends ConsumerWidget {
                       ? _buildEmptySection('Aucun document tendance pour le moment')
                       : _buildTrendingCards(context, docs),
                   loading: () => _buildShimmerRow(155, 185),
-                  error: (_, __) => _buildEmptySection('Impossible de charger les tendances'),
+                  error: (e, _) => NetworkErrorWidget(error: e, compact: true, onRetry: () => ref.invalidate(trendingDocumentsProvider)),
                 ),
               ),
               SliverToBoxAdapter(
@@ -91,7 +84,7 @@ class HomeScreen extends ConsumerWidget {
                       ? _buildEmptySection('Aucun nouveau document')
                       : _buildNewDocs(context, docs),
                   loading: () => _buildShimmerRow(140, 160),
-                  error: (_, __) => _buildEmptySection('Impossible de charger'),
+                  error: (e, _) => NetworkErrorWidget(error: e, compact: true, onRetry: () => ref.invalidate(newDocumentsProvider)),
                 ),
               ),
               SliverToBoxAdapter(
@@ -149,28 +142,34 @@ class HomeScreen extends ConsumerWidget {
             ],
           ),
           const Spacer(),
-          Stack(
-            children: [
-              Container(
-                width: 42, height: 42,
-                decoration: const BoxDecoration(color: Color(0xFFF1F3F5), shape: BoxShape.circle),
-                child: const Icon(Icons.notifications_outlined, size: 20, color: Color(0xFF495057)),
-              ),
-              if (notifCount > 0)
-                Positioned(
-                  top: 4, right: 4,
-                  child: Container(
-                    width: 16, height: 16,
-                    decoration: const BoxDecoration(color: Color(0xFFFA5252), shape: BoxShape.circle),
-                    child: Center(
-                      child: Text(
-                        notifCount > 9 ? '9+' : '$notifCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationScreen()),
+            ),
+            child: Stack(
+              children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: const BoxDecoration(color: Color(0xFFF1F3F5), shape: BoxShape.circle),
+                  child: const Icon(Icons.notifications_outlined, size: 20, color: Color(0xFF495057)),
+                ),
+                if (notifCount > 0)
+                  Positioned(
+                    top: 4, right: 4,
+                    child: Container(
+                      width: 16, height: 16,
+                      decoration: const BoxDecoration(color: Color(0xFFFA5252), shape: BoxShape.circle),
+                      child: Center(
+                        child: Text(
+                          notifCount > 9 ? '9+' : '$notifCount',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -576,8 +575,8 @@ class HomeScreen extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: Row(
                       children: [
-                        const Icon(Icons.star_rounded, size: 12, color: Color(0xFFFFD43B)),
-                        Text(' ${doc.rating.toStringAsFixed(1)}',
+                        const Icon(Icons.favorite_rounded, size: 12, color: Color(0xFFE03131)),
+                        Text(' ${doc.likesCount}',
                             style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF495057))),
                         const SizedBox(width: 4),
                         Text('• ${_formatCount(doc.downloadsCount)} téléch.',

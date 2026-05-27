@@ -131,7 +131,7 @@ class DownloadManager {
       annee: doc.annee,
       hasCorrige: doc.hasCorrige,
       isOfficial: doc.isOfficial,
-      rating: doc.rating,
+      rating: doc.likesCount.toDouble(),
       fileSizeKb: doc.fileSizeKb,
       fileUrl: doc.fileUrl,
       fileType: doc.fileType,

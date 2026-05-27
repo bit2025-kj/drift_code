@@ -1,6 +1,7 @@
-import io
+import json
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.utils.auth import get_current_user
 from app.models.user import User
@@ -10,10 +11,26 @@ from mistralai.client import Mistral
 router = APIRouter(prefix="/ai", tags=["AI"])
 
 _SYSTEM_PROMPT = """Tu es l'assistant IA de Nafa Edu, une plateforme éducative pour les élèves et étudiants du Burkina Faso.
-Tu aides les élèves à comprendre leurs cours, préparer leurs examens (BAC, BEPC, concours), et répondre à leurs questions académiques.
-Tu réponds en français, de façon claire, pédagogique et encourageante.
-Quand tu expliques un concept, donne des exemples concrets adaptés au contexte africain.
-Sois concis mais complet. Si une question est hors sujet éducatif, redirige poliment vers les études."""
+Tu aides avec les cours, examens (BAC, BEPC, concours) et questions académiques.
+
+FORMAT (obligatoire — l'application affiche du Markdown) :
+- Réponds en Markdown structuré
+- Sois BREF : va droit au but, sans introduction ni conclusion inutile
+- Développe uniquement si la question est complexe ou nécessite des étapes détaillées
+- Utilise **gras** pour les termes et notions importants
+- Listes à puces ou numérotées pour les étapes, énumérations, propriétés
+- Tableaux Markdown pour les comparaisons et données structurées
+- Formules mathématiques dans des blocs de code (```), exemple :
+  ```
+  f(x) = ax² + bx + c
+  ```
+- Titres (## ou ###) uniquement pour les réponses longues avec plusieurs sections
+- Blockquotes (> ) pour les définitions importantes ou remarques à retenir
+
+STYLE :
+- Français clair et pédagogique, ton encourageant
+- Exemples concrets adaptés au contexte burkinabè / africain
+- Si hors sujet éducatif : redirige poliment vers les études"""
 
 
 class ChatMessage(BaseModel):
@@ -111,3 +128,45 @@ async def chat(
         return ChatResponse(reply=reply)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur IA: {str(e)}")
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    body: ChatRequest,
+    current_user: User = Depends(get_current_user),
+):
+    if not settings.MISTRAL_API_KEY:
+        raise HTTPException(status_code=503, detail="Service IA non configuré")
+
+    system = _SYSTEM_PROMPT
+    if body.document_context:
+        system += f"\n\nDocument de l'élève :\n\n---\n{body.document_context[:8000]}\n---"
+
+    msgs = [
+        {"role": "system", "content": system},
+        *[{"role": m.role, "content": m.content} for m in body.messages],
+    ]
+
+    def _generate():
+        try:
+            client = Mistral(api_key=settings.MISTRAL_API_KEY)
+            for event in client.chat.stream(model="mistral-large-latest", messages=msgs):
+                if not event.data.choices:
+                    continue
+                raw = event.data.choices[0].delta.content
+                if not raw:
+                    continue
+                text = raw if isinstance(raw, str) else "".join(
+                    c.text for c in raw if hasattr(c, "text") and c.text
+                )
+                if text:
+                    yield f"data: {json.dumps({'delta': text})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

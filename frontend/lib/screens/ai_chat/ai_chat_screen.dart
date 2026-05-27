@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/core/api/api_client.dart';
@@ -85,6 +86,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   final List<_Message> _messages = [];
   bool _isLoading = false;
+  bool _isStreaming = false; // true once first token arrives
   bool _isUploading = false;
   String _sessionId = '';
   _AttachedDoc? _attachedDoc;
@@ -292,14 +294,17 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   // ── Chat logic ────────────────────────────────────────────────────────────────
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animated = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (!_scrollController.hasClients) return;
+      if (animated) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
+      } else {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       }
     });
   }
@@ -314,31 +319,87 @@ class _AiChatScreenState extends State<AiChatScreen> {
     setState(() {
       _messages.add(_Message(role: 'user', text: text));
       _isLoading = true;
+      _isStreaming = false;
     });
     _scrollToBottom();
 
-    try {
-      final history = _messages
-          .where((m) => m.role != 'typing')
-          .map((m) => {'role': m.role == 'ai' ? 'assistant' : 'user', 'content': m.text})
-          .toList();
+    // History to send: only messages up to and including the user turn just added
+    final history = _messages
+        .map((m) => {'role': m.role == 'ai' ? 'assistant' : 'user', 'content': m.text})
+        .toList();
 
-      final res = await ApiClient.instance.dio.post(
-        ApiEndpoints.aiChat,
+    String accumulated = '';
+    final lineBuffer = StringBuffer();
+
+    try {
+      final response = await ApiClient.instance.dio.post(
+        ApiEndpoints.aiChatStream,
         data: {
           'messages': history,
           if (docContext != null && docContext.isNotEmpty) 'document_context': docContext,
         },
+        options: Options(responseType: ResponseType.stream),
       );
-      final reply = (res.data['reply'] as String?) ?? "Désolé, je n'ai pas pu répondre.";
-      setState(() {
-        _isLoading = false;
-        _messages.add(_Message(role: 'ai', text: reply));
-      });
+
+      final stream = (response.data as ResponseBody).stream;
+
+      await for (final bytes in stream) {
+        if (!mounted) return;
+        lineBuffer.write(utf8.decode(bytes, allowMalformed: true));
+
+        // Process all complete lines in the buffer
+        while (true) {
+          final buf = lineBuffer.toString();
+          final nlIdx = buf.indexOf('\n');
+          if (nlIdx == -1) break;
+          final line = buf.substring(0, nlIdx).trimRight();
+          lineBuffer.clear();
+          lineBuffer.write(buf.substring(nlIdx + 1));
+
+          if (!line.startsWith('data: ')) continue;
+          final data = line.substring(6);
+
+          if (data == '[DONE]') {
+            setState(() { _isLoading = false; _isStreaming = false; });
+            _saveCurrentSession();
+            return;
+          }
+
+          try {
+            final parsed = jsonDecode(data) as Map<String, dynamic>;
+            final delta = parsed['delta'] as String?;
+            final error = parsed['error'] as String?;
+
+            if (delta != null) {
+              accumulated += delta;
+              setState(() {
+                if (!_isStreaming) {
+                  _isStreaming = true;
+                  _messages.add(_Message(role: 'ai', text: accumulated));
+                } else {
+                  _messages[_messages.length - 1] = _Message(role: 'ai', text: accumulated);
+                }
+              });
+              _scrollToBottom(animated: false);
+            } else if (error != null) {
+              setState(() {
+                _isLoading = false;
+                _isStreaming = false;
+                _messages.add(_Message(role: 'ai', text: "Erreur : $error", isError: true));
+              });
+              return;
+            }
+          } catch (_) {}
+        }
+      }
+
+      setState(() { _isLoading = false; _isStreaming = false; });
       _saveCurrentSession();
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
+        _isStreaming = false;
         _messages.add(_Message(
           role: 'ai',
           text: "Je rencontre un problème de connexion. Vérifie ta connexion internet et réessaie. 🔌",
@@ -465,10 +526,14 @@ class _AiChatScreenState extends State<AiChatScreen> {
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    itemCount: _messages.length + (_isLoading ? 1 : 0),
+                    // Show typing bubble only while waiting for first token
+                    itemCount: _messages.length + (_isLoading && !_isStreaming ? 1 : 0),
                     itemBuilder: (_, i) {
-                      if (_isLoading && i == _messages.length) return _TypingBubble();
-                      return _MessageBubble(message: _messages[i]);
+                      if (_isLoading && !_isStreaming && i == _messages.length) {
+                        return _TypingBubble();
+                      }
+                      final isStreamingThis = _isStreaming && i == _messages.length - 1;
+                      return _MessageBubble(message: _messages[i], isStreaming: isStreamingThis);
                     },
                   ),
           ),
@@ -882,13 +947,14 @@ class _HistorySheetState extends State<_HistorySheet> {
 
 class _MessageBubble extends StatelessWidget {
   final _Message message;
-  const _MessageBubble({required this.message});
+  final bool isStreaming;
+  const _MessageBubble({required this.message, this.isStreaming = false});
 
   @override
   Widget build(BuildContext context) {
     final isAI = message.role == 'ai';
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         mainAxisAlignment: isAI ? MainAxisAlignment.start : MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -897,45 +963,243 @@ class _MessageBubble extends StatelessWidget {
             Container(
               width: 28, height: 28,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF7048E8), Color(0xFF3B5BDB)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF7048E8), Color(0xFF3B5BDB)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 14),
             ),
             const SizedBox(width: 8),
+            Flexible(child: _AiBubble(message: message, isStreaming: isStreaming)),
+          ] else ...[
+            Flexible(child: _UserBubble(message: message)),
+            const SizedBox(width: 4),
           ],
-          Flexible(
-            child: GestureDetector(
-              onLongPress: () {
-                Clipboard.setData(ClipboardData(text: message.text));
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Copié !'), duration: Duration(seconds: 1)));
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isAI ? (message.isError ? const Color(0xFFFFF5F5) : Colors.white) : const Color(0xFF3B5BDB),
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(isAI ? 4 : 18),
-                    bottomRight: Radius.circular(isAI ? 18 : 4),
+        ],
+      ),
+    );
+  }
+}
+
+// ── User bubble ────────────────────────────────────────────────────────────────
+
+class _UserBubble extends StatelessWidget {
+  final _Message message;
+  const _UserBubble({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onLongPress: () {
+        Clipboard.setData(ClipboardData(text: message.text));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Message copié !'),
+            duration: Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF3B5BDB),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(4),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF3B5BDB).withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          message.text,
+          style: GoogleFonts.inter(fontSize: 13.5, color: Colors.white, height: 1.55),
+        ),
+      ),
+    );
+  }
+}
+
+// ── AI bubble (markdown + copy) ────────────────────────────────────────────────
+
+class _AiBubble extends StatefulWidget {
+  final _Message message;
+  final bool isStreaming;
+  const _AiBubble({required this.message, this.isStreaming = false});
+
+  @override
+  State<_AiBubble> createState() => _AiBubbleState();
+}
+
+class _AiBubbleState extends State<_AiBubble> {
+  bool _copied = false;
+
+  // Shared markdown style — initialized once
+  static final _mdStyle = MarkdownStyleSheet(
+    p: GoogleFonts.inter(fontSize: 13.5, color: const Color(0xFF1A1D23), height: 1.65),
+    h1: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF1A1D23)),
+    h2: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF1A1D23)),
+    h3: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w700, color: const Color(0xFF3B5BDB)),
+    strong: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w700, color: const Color(0xFF1A1D23)),
+    em: GoogleFonts.inter(fontSize: 13.5, fontStyle: FontStyle.italic, color: const Color(0xFF495057)),
+    del: GoogleFonts.inter(fontSize: 13.5, decoration: TextDecoration.lineThrough, color: const Color(0xFF868E96)),
+    // Inline code — used for short formulas/values
+    code: const TextStyle(
+      fontFamily: 'monospace',
+      fontSize: 12.5,
+      color: Color(0xFF5C3BC8),
+      backgroundColor: Color(0xFFF0EEFF),
+    ),
+    // Code block — used for multi-line formulas and equations
+    codeblockDecoration: BoxDecoration(
+      color: const Color(0xFFF3F0FF),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFD0BFFF)),
+    ),
+    codeblockPadding: const EdgeInsets.all(12),
+    // Blockquote — used for definitions and key remarks
+    blockquote: TextStyle(
+      fontFamily: GoogleFonts.inter().fontFamily,
+      fontSize: 13,
+      color: const Color(0xFF495057),
+      fontStyle: FontStyle.italic,
+    ),
+    blockquoteDecoration: const BoxDecoration(
+      color: Color(0xFFF0EEFF),
+      border: Border(left: BorderSide(color: Color(0xFF7048E8), width: 3)),
+    ),
+    blockquotePadding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+    // Tables
+    tableHead: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1A1D23)),
+    tableBody: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF495057)),
+    tableBorder: TableBorder.all(color: const Color(0xFFDEE2E6), width: 1),
+    tableHeadAlign: TextAlign.left,
+    tableCellsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    // Lists
+    listBullet: GoogleFonts.inter(fontSize: 13.5, color: const Color(0xFF7048E8)),
+    listIndent: 20,
+    listBulletPadding: const EdgeInsets.only(right: 6),
+    // Horizontal rule
+    horizontalRuleDecoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: Color(0xFFE9ECEF), width: 1.5)),
+    ),
+  );
+
+  void _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.message.text));
+    setState(() => _copied = true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isError = widget.message.isError;
+    return Container(
+      decoration: BoxDecoration(
+        color: isError ? const Color(0xFFFFF5F5) : Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(18),
+          topRight: Radius.circular(18),
+          bottomLeft: Radius.circular(4),
+          bottomRight: Radius.circular(18),
+        ),
+        border: Border.all(
+          color: isError ? const Color(0xFFFFCDD2) : const Color(0xFFE9ECEF),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            child: isError
+                ? Text(
+                    widget.message.text,
+                    style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFFC62828), height: 1.5),
+                  )
+                : MarkdownBody(
+                    data: widget.message.text,
+                    selectable: false,
+                    styleSheet: _mdStyle,
+                    softLineBreak: true,
                   ),
-                  border: isAI ? Border.all(color: message.isError ? const Color(0xFFFFCDD2) : const Color(0xFFE9ECEF)) : null,
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))],
-                ),
-                child: Text(
-                  message.text,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: isAI ? (message.isError ? const Color(0xFFC62828) : const Color(0xFF1A1D23)) : Colors.white,
-                    height: 1.5,
-                  ),
-                ),
-              ),
+          ),
+          // Bottom row: streaming indicator OR copy button
+          Padding(
+            padding: const EdgeInsets.only(right: 10, bottom: 6),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: widget.isStreaming
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 10, height: 10,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: const Color(0xFFADB5BD),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        const Text(
+                          'En cours...',
+                          style: TextStyle(fontSize: 10, color: Color(0xFFADB5BD)),
+                        ),
+                      ],
+                    )
+                  : GestureDetector(
+                      onTap: _copy,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _copied
+                              ? const Color(0xFF2F9E44).withValues(alpha: 0.08)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _copied ? Icons.check_rounded : Icons.copy_rounded,
+                              size: 12,
+                              color: _copied ? const Color(0xFF2F9E44) : const Color(0xFFADB5BD),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              _copied ? 'Copié !' : 'Copier',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: _copied ? const Color(0xFF2F9E44) : const Color(0xFFADB5BD),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
           ),
-          if (!isAI) const SizedBox(width: 4),
         ],
       ),
     );

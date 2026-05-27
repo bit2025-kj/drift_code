@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nafa_edu/config/theme.dart';
+import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/core/api/api_client.dart';
 import 'package:nafa_edu/core/api/api_endpoints.dart';
 import 'package:nafa_edu/models/forum_model.dart';
@@ -35,6 +36,28 @@ class _DiscussionDetailScreenState
   bool _isPosting = false;
   String? _replyToId;
   String? _replyToName;
+
+  // Like state — initialized from server on first load
+  bool? _discussionLiked;
+  int? _discussionLikesCount;
+  final Map<String, bool> _commentLiked = {};
+  final Map<String, int> _commentLikesCount = {};
+  bool _likedStateInitialized = false;
+
+  void _initLikedState(DiscussionDetailModel disc) {
+    if (_likedStateInitialized) return;
+    _likedStateInitialized = true;
+    _discussionLiked = false;
+    _discussionLikesCount = disc.likesCount;
+    for (final c in disc.comments) {
+      _commentLiked[c.id] = false;
+      _commentLikesCount[c.id] = c.likesCount;
+      for (final r in c.replies) {
+        _commentLiked[r.id] = false;
+        _commentLikesCount[r.id] = r.likesCount;
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -91,19 +114,47 @@ class _DiscussionDetailScreenState
   }
 
   Future<void> _likeDiscussion() async {
+    final prevLiked = _discussionLiked ?? false;
+    final prevCount = _discussionLikesCount ?? 0;
+    setState(() {
+      _discussionLiked = !prevLiked;
+      _discussionLikesCount = prevLiked ? (prevCount - 1).clamp(0, 9999) : prevCount + 1;
+    });
     try {
-      await ApiClient.instance.dio
+      final res = await ApiClient.instance.dio
           .post(ApiEndpoints.likeDiscussion(widget.discussionId));
-      ref.invalidate(discussionDetailProvider(widget.discussionId));
-    } catch (_) {}
+      setState(() {
+        _discussionLiked = res.data['liked'] as bool? ?? !prevLiked;
+        _discussionLikesCount = res.data['likes_count'] as int? ?? _discussionLikesCount;
+      });
+    } catch (_) {
+      setState(() {
+        _discussionLiked = prevLiked;
+        _discussionLikesCount = prevCount;
+      });
+    }
   }
 
   Future<void> _likeComment(String commentId) async {
+    final prevLiked = _commentLiked[commentId] ?? false;
+    final prevCount = _commentLikesCount[commentId] ?? 0;
+    setState(() {
+      _commentLiked[commentId] = !prevLiked;
+      _commentLikesCount[commentId] = prevLiked ? (prevCount - 1).clamp(0, 9999) : prevCount + 1;
+    });
     try {
-      await ApiClient.instance.dio
+      final res = await ApiClient.instance.dio
           .post(ApiEndpoints.likeComment(widget.discussionId, commentId));
-      ref.invalidate(discussionDetailProvider(widget.discussionId));
-    } catch (_) {}
+      setState(() {
+        _commentLiked[commentId] = res.data['liked'] as bool? ?? !prevLiked;
+        _commentLikesCount[commentId] = res.data['likes_count'] as int? ?? _commentLikesCount[commentId] ?? prevCount;
+      });
+    } catch (_) {
+      setState(() {
+        _commentLiked[commentId] = prevLiked;
+        _commentLikesCount[commentId] = prevCount;
+      });
+    }
   }
 
   void _startReply(String commentId, String authorName) {
@@ -150,7 +201,9 @@ class _DiscussionDetailScreenState
             ],
           ),
         ),
-        data: (disc) => Column(
+        data: (disc) {
+          _initLikedState(disc);
+          return Column(
           children: [
             Expanded(
               child: ListView(
@@ -159,6 +212,8 @@ class _DiscussionDetailScreenState
                   _FullPostCard(
                     disc: disc,
                     onLike: _likeDiscussion,
+                    isLiked: _discussionLiked ?? false,
+                    likesCount: _discussionLikesCount ?? disc.likesCount,
                     relativeTime: _relativeTime,
                   ),
                   const SizedBox(height: 6),
@@ -195,12 +250,16 @@ class _DiscussionDetailScreenState
                         children: disc.comments
                             .map((c) => _CommentTile(
                                   comment: c,
+                                  isLiked: _commentLiked[c.id] ?? false,
+                                  likesCount: _commentLikesCount[c.id] ?? c.likesCount,
                                   onLike: () => _likeComment(c.id),
                                   onReply: () =>
                                       _startReply(c.id, c.author.fullName),
                                   relativeTime: _relativeTime,
                                   likeComment: _likeComment,
                                   startReply: _startReply,
+                                  commentLiked: _commentLiked,
+                                  commentLikesCount: _commentLikesCount,
                                 ))
                             .toList(),
                       ),
@@ -220,9 +279,12 @@ class _DiscussionDetailScreenState
                 _replyToId = null;
                 _replyToName = null;
               }),
+              initials: ref.watch(authProvider).user?.initials ?? 'U',
+              avatarUrl: ref.watch(authProvider).user?.avatarUrl,
             ),
           ],
-        ),
+        );
+        },
       ),
     );
   }
@@ -233,11 +295,15 @@ class _DiscussionDetailScreenState
 class _FullPostCard extends StatelessWidget {
   final DiscussionDetailModel disc;
   final VoidCallback onLike;
+  final bool isLiked;
+  final int likesCount;
   final String Function(DateTime) relativeTime;
 
   const _FullPostCard({
     required this.disc,
     required this.onLike,
+    required this.isLiked,
+    required this.likesCount,
     required this.relativeTime,
   });
 
@@ -257,7 +323,7 @@ class _FullPostCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ForumGradientAvatar(
-                    initials: disc.author.initials, radius: 20),
+                    initials: disc.author.initials, radius: 20, avatarUrl: disc.author.avatarUrl),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -307,12 +373,12 @@ class _FullPostCard extends StatelessWidget {
             ),
 
           // Stats row
-          if (disc.likesCount > 0 || disc.commentsCount > 0)
+          if (likesCount > 0 || disc.commentsCount > 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
               child: Row(
                 children: [
-                  if (disc.likesCount > 0) ...[
+                  if (likesCount > 0) ...[
                     Container(
                       width: 18,
                       height: 18,
@@ -324,7 +390,7 @@ class _FullPostCard extends StatelessWidget {
                           size: 11, color: Colors.white),
                     ),
                     const SizedBox(width: 4),
-                    Text('${disc.likesCount}',
+                    Text('$likesCount',
                         style: const TextStyle(
                             fontSize: 13, color: _kTimestampColor)),
                   ],
@@ -351,9 +417,9 @@ class _FullPostCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 ForumActionButton(
-                  icon: Icons.thumb_up_outlined,
+                  icon: isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
                   label: 'J\'aime',
-                  color: kActionGray,
+                  color: isLiked ? AppColors.primary : kActionGray,
                   onTap: onLike,
                 ),
                 ForumActionButton(
@@ -381,19 +447,27 @@ class _FullPostCard extends StatelessWidget {
 
 class _CommentTile extends StatefulWidget {
   final CommentModel comment;
+  final bool isLiked;
+  final int likesCount;
   final VoidCallback onLike;
   final VoidCallback onReply;
   final String Function(DateTime) relativeTime;
   final Future<void> Function(String) likeComment;
   final void Function(String, String) startReply;
+  final Map<String, bool> commentLiked;
+  final Map<String, int> commentLikesCount;
 
   const _CommentTile({
     required this.comment,
+    required this.isLiked,
+    required this.likesCount,
     required this.onLike,
     required this.onReply,
     required this.relativeTime,
     required this.likeComment,
     required this.startReply,
+    required this.commentLiked,
+    required this.commentLikesCount,
   });
 
   @override
@@ -448,7 +522,7 @@ class _CommentTileState extends State<_CommentTile>
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ForumGradientAvatar(initials: c.author.initials, radius: 18),
+              ForumGradientAvatar(initials: c.author.initials, radius: 18, avatarUrl: c.author.avatarUrl),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -496,17 +570,17 @@ class _CommentTileState extends State<_CommentTile>
                             onTap: widget.onLike,
                             child: Row(
                               children: [
-                                const Text(
+                                Text(
                                   'J\'aime',
                                   style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: kActionGray),
+                                      color: widget.isLiked ? AppColors.primary : kActionGray),
                                 ),
-                                if (c.likesCount > 0) ...[
+                                if (widget.likesCount > 0) ...[
                                   const SizedBox(width: 3),
                                   Text(
-                                    '(${c.likesCount})',
+                                    '(${widget.likesCount})',
                                     style: const TextStyle(
                                         fontSize: 11,
                                         color: _kTimestampColor),
@@ -567,9 +641,10 @@ class _CommentTileState extends State<_CommentTile>
                   children: c.replies
                       .map((r) => _ReplyTile(
                             reply: r,
+                            isLiked: widget.commentLiked[r.id] ?? false,
+                            likesCount: widget.commentLikesCount[r.id] ?? r.likesCount,
                             onLike: () => widget.likeComment(r.id),
-                            onReply: () =>
-                                widget.startReply(c.id, r.author.fullName),
+                            onReply: () => widget.startReply(c.id, r.author.fullName),
                             relativeTime: widget.relativeTime,
                           ))
                       .toList(),
@@ -587,12 +662,16 @@ class _CommentTileState extends State<_CommentTile>
 
 class _ReplyTile extends StatelessWidget {
   final CommentModel reply;
+  final bool isLiked;
+  final int likesCount;
   final VoidCallback onLike;
   final VoidCallback onReply;
   final String Function(DateTime) relativeTime;
 
   const _ReplyTile({
     required this.reply,
+    required this.isLiked,
+    required this.likesCount,
     required this.onLike,
     required this.onReply,
     required this.relativeTime,
@@ -606,7 +685,7 @@ class _ReplyTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ForumGradientAvatar(initials: r.author.initials, radius: 14),
+          ForumGradientAvatar(initials: r.author.initials, radius: 14, avatarUrl: r.author.avatarUrl),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -653,17 +732,17 @@ class _ReplyTile extends StatelessWidget {
                         onTap: onLike,
                         child: Row(
                           children: [
-                            const Text(
+                            Text(
                               'J\'aime',
                               style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: kActionGray),
+                                  color: isLiked ? AppColors.primary : kActionGray),
                             ),
-                            if (r.likesCount > 0) ...[
+                            if (likesCount > 0) ...[
                               const SizedBox(width: 3),
                               Text(
-                                '(${r.likesCount})',
+                                '($likesCount)',
                                 style: const TextStyle(
                                     fontSize: 10, color: _kTimestampColor),
                               ),
@@ -703,6 +782,8 @@ class _CommentInputBar extends StatelessWidget {
   final String? replyToName;
   final VoidCallback onSend;
   final VoidCallback onCancelReply;
+  final String initials;
+  final String? avatarUrl;
 
   const _CommentInputBar({
     required this.controller,
@@ -711,6 +792,8 @@ class _CommentInputBar extends StatelessWidget {
     required this.replyToName,
     required this.onSend,
     required this.onCancelReply,
+    required this.initials,
+    this.avatarUrl,
   });
 
   @override
@@ -733,7 +816,7 @@ class _CommentInputBar extends StatelessWidget {
           children: [
             if (replyToName != null)
               Container(
-                color: AppColors.primary.withValues(alpha: 0.06),
+                color: AppColors.primary.withOpacity(0.06),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: Row(
@@ -762,7 +845,7 @@ class _CommentInputBar extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
               child: Row(
                 children: [
-                  const ForumGradientAvatar(initials: 'M', radius: 18),
+                  ForumGradientAvatar(initials: initials, radius: 18, avatarUrl: avatarUrl),
                   const SizedBox(width: 8),
                   Expanded(
                     child: ValueListenableBuilder<TextEditingValue>(

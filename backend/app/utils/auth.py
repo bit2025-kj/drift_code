@@ -10,6 +10,7 @@ from app.database import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
+bearer_scheme_optional = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -64,6 +65,22 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur introuvable")
     return user
+
+
+async def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    if not credentials:
+        return None
+    try:
+        from app.models import User
+        from sqlalchemy.orm import selectinload
+        user_id = decode_token(credentials.credentials, expected_type="access")
+        result = await db.execute(select(User).where(User.id == user_id, User.is_active == True))
+        return result.scalar_one_or_none()
+    except Exception:
+        return None
 
 
 async def get_current_teacher(user=Depends(get_current_user)):

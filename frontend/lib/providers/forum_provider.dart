@@ -118,11 +118,13 @@ class DiscussionNotifier extends StateNotifier<DiscussionListState> {
       if (cat != null) params['category_id'] = cat;
       final res = await ApiClient.instance.dio.get(ApiEndpoints.discussions, queryParameters: params);
       final discussions = (res.data as List).map((d) => DiscussionModel.fromJson(d)).toList();
+      final likedIds = <String>{};
       state = state.copyWith(
         discussions: discussions,
         isLoading: false,
         page: 1,
         hasMore: discussions.length >= _perPage,
+        likedIds: likedIds,
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'Erreur de chargement');
@@ -142,11 +144,14 @@ class DiscussionNotifier extends StateNotifier<DiscussionListState> {
       if (state.categoryId != null) params['category_id'] = state.categoryId;
       final res = await ApiClient.instance.dio.get(ApiEndpoints.discussions, queryParameters: params);
       final more = (res.data as List).map((d) => DiscussionModel.fromJson(d)).toList();
+      final newLikedIds = Set<String>.from(state.likedIds)
+        ;
       state = state.copyWith(
         discussions: [...state.discussions, ...more],
         isLoading: false,
         page: nextPage,
         hasMore: more.length >= _perPage,
+        likedIds: newLikedIds,
       );
     } catch (_) {
       state = state.copyWith(isLoading: false);
@@ -156,7 +161,7 @@ class DiscussionNotifier extends StateNotifier<DiscussionListState> {
   Future<void> toggleLike(String discussionId) async {
     final alreadyLiked = state.likedIds.contains(discussionId);
     final newLikedIds = Set<String>.from(state.likedIds);
-    int delta;
+    final int delta;
     if (alreadyLiked) {
       newLikedIds.remove(discussionId);
       delta = -1;
@@ -175,15 +180,24 @@ class DiscussionNotifier extends StateNotifier<DiscussionListState> {
       }).toList(),
     );
     try {
-      await ApiClient.instance.dio.post(ApiEndpoints.likeDiscussion(discussionId));
+      final res = await ApiClient.instance.dio.post(ApiEndpoints.likeDiscussion(discussionId));
+      final liked = res.data['liked'] as bool? ?? !alreadyLiked;
+      final serverCount = res.data['likes_count'] as int?;
+      final confirmedIds = Set<String>.from(state.likedIds);
+      if (liked) { confirmedIds.add(discussionId); } else { confirmedIds.remove(discussionId); }
+      state = state.copyWith(
+        likedIds: confirmedIds,
+        discussions: state.discussions.map((d) {
+          if (d.id == discussionId) {
+            return d.copyWith(likesCount: serverCount ?? d.likesCount);
+          }
+          return d;
+        }).toList(),
+      );
     } catch (_) {
       // revert
       final revertIds = Set<String>.from(state.likedIds);
-      if (alreadyLiked) {
-        revertIds.add(discussionId);
-      } else {
-        revertIds.remove(discussionId);
-      }
+      if (alreadyLiked) { revertIds.add(discussionId); } else { revertIds.remove(discussionId); }
       state = state.copyWith(
         likedIds: revertIds,
         discussions: state.discussions.map((d) {

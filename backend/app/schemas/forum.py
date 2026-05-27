@@ -35,6 +35,7 @@ class CommentOut(BaseModel):
     media_urls: list[str] = []
     parent_id: str | None = None
     replies: list["CommentOut"] = []
+    liked_by_me: bool = False
     model_config = {"from_attributes": True}
 
 
@@ -52,6 +53,7 @@ class DiscussionOut(BaseModel):
     category_name: str | None = None
     matiere_name: str | None = None
     media_urls: list[str] = []
+    liked_by_me: bool = False
     model_config = {"from_attributes": True}
 
 

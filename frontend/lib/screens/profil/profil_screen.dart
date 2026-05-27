@@ -10,10 +10,13 @@ import 'package:nafa_edu/core/api/api_client.dart';
 import 'package:nafa_edu/core/api/api_endpoints.dart';
 import 'package:nafa_edu/models/user_model.dart';
 import 'package:nafa_edu/providers/auth_provider.dart';
+import 'package:nafa_edu/providers/notification_provider.dart';
 import 'package:nafa_edu/providers/user_stats_provider.dart';
 import 'package:nafa_edu/screens/downloads_screen.dart';
+import 'package:nafa_edu/screens/notifications/notification_screen.dart';
 import 'package:nafa_edu/screens/profil/settings_screen.dart';
 import 'package:nafa_edu/screens/quiz/quiz_history_screen.dart';
+import 'package:nafa_edu/widgets/network_error_widget.dart';
 
 class ProfilScreen extends ConsumerStatefulWidget {
   const ProfilScreen({super.key});
@@ -151,11 +154,30 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
                     ],
                   ),
                   const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Notifications à venir'), duration: Duration(seconds: 1)),
-                    ),
+                  Stack(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                        ),
+                      ),
+                      if (ref.watch(unreadCountProvider) > 0)
+                        Positioned(
+                          top: 6, right: 6,
+                          child: Container(
+                            width: 14, height: 14,
+                            decoration: const BoxDecoration(color: Color(0xFFFA5252), shape: BoxShape.circle),
+                            child: Center(
+                              child: Text(
+                                ref.watch(unreadCountProvider) > 9 ? '9+' : '${ref.watch(unreadCountProvider)}',
+                                style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   IconButton(
                     icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
@@ -525,11 +547,7 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-            error: (_, __) => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text('Impossible de charger la progression',
-                  style: TextStyle(color: AppColors.textSecondary)),
-            ),
+            error: (e, _) => NetworkErrorWidget(error: e, compact: true),
             data: (s) {
               if (s.subjectProgress.isEmpty) {
                 return const Padding(
@@ -648,11 +666,7 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
               padding: EdgeInsets.symmetric(vertical: 16),
               child: CircularProgressIndicator(strokeWidth: 2),
             )),
-            error: (_, __) => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Impossible de charger l\'activité',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-            ),
+            error: (e, _) => NetworkErrorWidget(error: e, compact: true),
             data: (items) {
               if (items.isEmpty) {
                 return const Padding(
@@ -690,8 +704,7 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
           const SizedBox(height: 12),
           badgesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            error: (_, __) => const Text('Impossible de charger les badges',
-                style: TextStyle(color: AppColors.textSecondary)),
+            error: (e, _) => NetworkErrorWidget(error: e, compact: true),
             data: (badges) {
               if (badges.isEmpty) {
                 return const Padding(

@@ -36,7 +36,7 @@ class ApiEndpoints {
   static String document(String id) => '/documents/$id';
   static String downloadDocument(String id) => '/documents/$id/download';
   static String favoriteDocument(String id) => '/documents/$id/favorite';
-  static String rateDocument(String id) => '/documents/$id/rate';
+  static String likeDocument(String id) => '/documents/$id/like';
 
   // ── Quiz ─────────────────────────────────────────────────────────────────────
   static const quizList = '/quiz';
@@ -79,12 +79,19 @@ class ApiEndpoints {
 
   // ── AI Chat & Conversations ───────────────────────────────────────────────
   static const aiChat = '/ai/chat';
+  static const aiChatStream = '/ai/chat/stream';
   static const aiUploadDocument = '/ai/upload-document';
   static const conversations = '/ai/conversations';
   static String conversation(String id) => '/ai/conversations/$id';
   static String sendMessage(String threadId) => '/ai/conversations/$threadId/messages';
   static String uploadToConversation(String threadId) => '/ai/conversations/$threadId/upload';
   static String conversationDocuments(String threadId) => '/ai/conversations/$threadId/documents';
+
+  // ── Notifications ────────────────────────────────────────────────────────────
+  static const notifications = '/notifications';
+  static const notificationsUnreadCount = '/notifications/unread-count';
+  static const notificationsReadAll = '/notifications/read-all';
+  static String notificationRead(int id) => '/notifications/$id/read';
 
   // ── Sync offline ─────────────────────────────────────────────────────────────
   static const syncPing = '/sync/ping';

@@ -39,6 +39,7 @@ class DiscussionModel {
   final String? categoryName;
   final String? matiereName;
   final List<String> mediaUrls;
+  final bool likedByMe;
 
   const DiscussionModel({
     required this.id,
@@ -54,6 +55,7 @@ class DiscussionModel {
     this.categoryName,
     this.matiereName,
     this.mediaUrls = const [],
+    this.likedByMe = false,
   });
 
   factory DiscussionModel.fromJson(Map<String, dynamic> j) => DiscussionModel(
@@ -70,9 +72,10 @@ class DiscussionModel {
         categoryName: j['category_name'],
         matiereName: j['matiere_name'],
         mediaUrls: List<String>.from(j['media_urls'] ?? []),
+        likedByMe: j['liked_by_me'] ?? false,
       );
 
-  DiscussionModel copyWith({int? likesCount}) => DiscussionModel(
+  DiscussionModel copyWith({int? likesCount, bool? likedByMe}) => DiscussionModel(
         id: id,
         title: title,
         content: content,
@@ -86,6 +89,7 @@ class DiscussionModel {
         categoryName: categoryName,
         matiereName: matiereName,
         mediaUrls: mediaUrls,
+        likedByMe: likedByMe ?? this.likedByMe,
       );
 }
 
@@ -99,6 +103,7 @@ class CommentModel {
   final List<String> mediaUrls;
   final String? parentId;
   final List<CommentModel> replies;
+  final bool likedByMe;
 
   const CommentModel({
     required this.id,
@@ -110,6 +115,7 @@ class CommentModel {
     this.mediaUrls = const [],
     this.parentId,
     this.replies = const [],
+    this.likedByMe = false,
   });
 
   factory CommentModel.fromJson(Map<String, dynamic> j) => CommentModel(
@@ -124,6 +130,7 @@ class CommentModel {
         replies: (j['replies'] as List? ?? [])
             .map((r) => CommentModel.fromJson(r))
             .toList(),
+        likedByMe: j['liked_by_me'] ?? false,
       );
 }
 
@@ -144,6 +151,7 @@ class DiscussionDetailModel extends DiscussionModel {
     super.categoryName,
     super.matiereName,
     super.mediaUrls,
+    super.likedByMe,
     required this.comments,
   });
 
@@ -162,6 +170,7 @@ class DiscussionDetailModel extends DiscussionModel {
         categoryName: j['category_name'],
         matiereName: j['matiere_name'],
         mediaUrls: List<String>.from(j['media_urls'] ?? []),
+        likedByMe: j['liked_by_me'] ?? false,
         comments: (j['comments'] as List? ?? [])
             .map((c) => CommentModel.fromJson(c))
             .toList(),

@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nafa_edu/config/theme.dart';
+import 'package:nafa_edu/providers/notification_provider.dart';
 import 'package:nafa_edu/screens/home/home_screen.dart';
 import 'package:nafa_edu/screens/banque/banque_screen.dart';
 import 'package:nafa_edu/screens/quiz/quiz_screen.dart';
@@ -14,7 +15,7 @@ import 'package:nafa_edu/widgets/common/offline_banner.dart';
 final tabIndexProvider = StateProvider<int>((ref) => 0);
 final banqueLevelFilterProvider = StateProvider<int?>((ref) => null);
 
-class MainShell extends ConsumerWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
   static const _screens = [
@@ -36,7 +37,21 @@ class MainShell extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends ConsumerState<MainShell> {
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(notificationProvider.notifier).fetch();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final currentIndex = ref.watch(tabIndexProvider);
 
     return Scaffold(
@@ -44,7 +59,7 @@ class MainShell extends ConsumerWidget {
         children: [
           const OfflineBanner(),
           Expanded(
-            child: IndexedStack(index: currentIndex, children: _screens),
+            child: IndexedStack(index: currentIndex, children: MainShell._screens),
           ),
         ],
       ),
@@ -59,6 +74,8 @@ class _NavBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(unreadCountProvider);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -75,6 +92,8 @@ class _NavBar extends ConsumerWidget {
             children: MainShell._navItems.asMap().entries.map((e) {
               final selected = currentIndex == e.key;
               final item = e.value;
+              // Show notification badge on Accueil tab (index 0)
+              final showBadge = e.key == 0 && unread > 0;
               return Expanded(
                 child: GestureDetector(
                   onTap: () => ref.read(tabIndexProvider.notifier).state = e.key,
@@ -82,18 +101,42 @@ class _NavBar extends ConsumerWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: selected ? AppColors.primary.withValues(alpha:0.1) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(
-                          selected ? item.activeIcon : item.icon,
-                          size: 22,
-                          color: selected ? AppColors.primary : const Color(0xFFADB5BD),
-                        ),
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: selected ? AppColors.primary.withValues(alpha:0.1) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(
+                              selected ? item.activeIcon : item.icon,
+                              size: 22,
+                              color: selected ? AppColors.primary : const Color(0xFFADB5BD),
+                            ),
+                          ),
+                          if (showBadge)
+                            Positioned(
+                              top: -2,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFA5252),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  unread > 9 ? '9+' : '$unread',
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(

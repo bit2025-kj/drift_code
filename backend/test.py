@@ -43,6 +43,7 @@ def test_forgot_password_demo_code():
     print("\nTesting forgot-password demo_code settings...")
     
     # Mock db dependency
+    from unittest.mock import AsyncMock
     mock_db = MagicMock()
     mock_user = MagicMock()
     mock_user.email = "test@example.com"
@@ -50,7 +51,7 @@ def test_forgot_password_demo_code():
     # Mock execute result
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_user
-    mock_db.execute.return_value = mock_result
+    mock_db.execute = AsyncMock(return_value=mock_result)
     
     from app.database import get_db
     app.dependency_overrides[get_db] = lambda: mock_db

@@ -7,6 +7,8 @@ import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/providers/forum_provider.dart';
 import 'package:nafa_edu/screens/forum/discussion_detail_screen.dart';
 import 'package:nafa_edu/screens/forum/forum_widgets.dart';
+import 'package:nafa_edu/services/sync_service.dart';
+import 'package:nafa_edu/widgets/network_error_widget.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kFeedBg = Color(0xFFF0F2F5);
@@ -47,6 +49,9 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(discussionProvider);
     final user = ref.watch(authProvider).user;
+    final isOffline = !ref.watch(isOnlineProvider);
+    final showErrorItem =
+        state.discussions.isEmpty && state.error != null && !state.isLoading;
 
     return Scaffold(
       backgroundColor: _kFeedBg,
@@ -74,13 +79,25 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
         child: ListView.builder(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          itemCount: 1 + state.discussions.length + (state.hasMore ? 1 : 0),
+          itemCount: showErrorItem
+              ? 2
+              : 1 + state.discussions.length + (state.hasMore ? 1 : 0),
           itemBuilder: (context, index) {
             if (index == 0) {
               return _ComposeBar(
                 onTap: () => _openComposer(context),
                 initials: user?.initials ?? 'U',
                 avatarUrl: user?.avatarUrl,
+              );
+            }
+            if (showErrorItem) {
+              return SizedBox(
+                height: MediaQuery.of(context).size.height * 0.55,
+                child: OfflineAwareErrorWidget(
+                  isOffline: isOffline,
+                  onRetry: () =>
+                      ref.read(discussionProvider.notifier).refresh(),
+                ),
               );
             }
             final postIndex = index - 1;
@@ -304,7 +321,7 @@ class _PostCardState extends State<_PostCard>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ForumGradientAvatar(initials: d.author.initials, radius: 20),
+                ForumGradientAvatar(initials: d.author.initials, radius: 20, avatarUrl: d.author.avatarUrl),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(

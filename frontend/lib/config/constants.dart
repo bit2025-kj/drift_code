@@ -25,7 +25,7 @@ class BFEducation {
   static const examTypes = {
     'primaire': ['CEP', 'Examen Blanc', 'Devoir'],
     'college': ['BEPC', 'Examen Blanc', 'Devoir', 'Test entrée 6ème'],
-    'lycee': ['BAC A1', 'BAC A2', 'BAC B', 'BAC C', 'BAC D', 'BAC E', 'Examen Blanc', 'Devoir'],
+    'lycee': ['BAC A', 'BAC D', 'BAC C', 'BAC H', 'BAC E', 'Examen Blanc', 'Devoir'],
     'universite': ['Partiel', 'Examen Final', 'Rattrapage'],
     'concours': [
       'ENAREF', 'ENAM', 'Police Nationale', 'Gendarmerie',
@@ -53,8 +53,8 @@ class BFEducation {
   ];
 
   static const availableYears = [
-    2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015,
-    2014, 2013, 2012, 2011, 2010,
+    2030, 2029,2028,2027, 2026,2025,2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015,
+    2014, 2013, 2012, 2011, 2010,  
   ];
 
   static const paymentMethods = ['Orange Money', 'Moov Money', 'Coris Money'];
@@ -67,7 +67,7 @@ class AppConstants {
   static const appTagline = 'Révise. Apprends. Réussis.';
 
   // API
-  static const baseUrl = 'http://192.168.100.13:8000';
+  static const baseUrl = 'http://192.168.100.62:8000';
   static const apiTimeout = Duration(seconds: 30);
 
   // Cache

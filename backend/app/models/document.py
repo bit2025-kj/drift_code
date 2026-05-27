@@ -33,6 +33,8 @@ class Document(Base):
     rating: Mapped[float] = mapped_column(Float, default=0.0)
     ratings_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    likes_count: Mapped[int] = mapped_column(Integer, default=0)
+
     # Source
     uploaded_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -48,6 +50,14 @@ class Document(Base):
     uploader = relationship("User", foreign_keys=[uploaded_by])
     favorites = relationship("Favorite", back_populates="document")
     downloads = relationship("Download", back_populates="document")
+
+
+class DocumentLike(Base):
+    __tablename__ = "document_likes"
+
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), primary_key=True)
+    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class Favorite(Base):

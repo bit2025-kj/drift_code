@@ -7,7 +7,7 @@ import os
 from app.config import settings
 from app.database import create_tables, AsyncSessionLocal, engine
 from app.utils.seed_data import seed_database
-from app.routers import auth, users, documents, quiz, forum, marketplace, education, chat, ai
+from app.routers import auth, users, documents, quiz, forum, marketplace, education, chat, ai, notifications
 from app.routers import sync
 
 
@@ -30,6 +30,7 @@ async def _apply_schema_migrations() -> None:
         # Documents
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS session VARCHAR(50)",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS ratings_count INTEGER DEFAULT 0",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0",
         "ALTER TABLE downloads ADD COLUMN IF NOT EXISTS is_corrige BOOLEAN DEFAULT FALSE",
     ]
     async with engine.begin() as conn:
@@ -103,6 +104,7 @@ app.include_router(education.router)
 app.include_router(chat.router)
 app.include_router(ai.router)
 app.include_router(sync.router)
+app.include_router(notifications.router)
 
 # Servir les fichiers uploadés — doit être monté APRÈS les routers API
 # pour que /uploads/... ne masque pas d'éventuelles routes API sur ce préfixe.

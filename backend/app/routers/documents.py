@@ -4,15 +4,15 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import Document, Favorite, Download, EducationLevel, Classe, Matiere, TypeExamen, User
+from app.models import Document, DocumentLike, Favorite, Download, EducationLevel, Classe, Matiere, TypeExamen, User
 from app.schemas.document import DocumentOut, DocumentListResponse, FavoriteToggleResponse
 from app.utils.auth import get_current_user
+from app.utils.notify import push_notif
 from app.config import settings
 import asyncio, uuid, os, shutil
 
 
-class RateRequest(BaseModel):
-    rating: float  # 1.0 à 5.0
+_CORRIGE_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 
 router = APIRouter(prefix="/documents", tags=["Banque de Sujets"])
 
@@ -49,6 +49,13 @@ def _enrich(doc: Document) -> DocumentOut:
         out.file_type = 'image' if ext in _IMAGE_EXTS else 'pdf'
         if out.file_type == 'pdf' and os.path.exists(_thumb_path(doc.id)):
             out.thumbnail_url = f"/uploads/thumbnails/{doc.id}.jpg"
+    if doc.corrige_url:
+        ext = os.path.splitext(doc.corrige_url)[1].lower()
+        out.corrige_url = doc.corrige_url
+        out.corrige_file_type = 'image' if ext in _CORRIGE_IMAGE_EXTS else 'pdf'
+    if doc.uploader:
+        out.uploader_name = doc.uploader.full_name
+        out.uploader_avatar = doc.uploader.avatar_url
     return out
 
 
@@ -74,6 +81,7 @@ async def list_documents(
             selectinload(Document.classe),
             selectinload(Document.matiere),
             selectinload(Document.type_examen),
+            selectinload(Document.uploader),
         )
         .where(Document.is_approved == True)
     )
@@ -100,8 +108,8 @@ async def list_documents(
 
     if sort_by == "popular":
         stmt = stmt.order_by(Document.downloads_count.desc())
-    elif sort_by == "rating":
-        stmt = stmt.order_by(Document.rating.desc())
+    elif sort_by == "likes":
+        stmt = stmt.order_by(Document.likes_count.desc())
     else:
         stmt = stmt.order_by(Document.created_at.desc())
 
@@ -194,26 +202,44 @@ async def toggle_favorite(
         return FavoriteToggleResponse(is_favorite=True, message="Ajouté aux favoris")
 
 
-@router.post("/{document_id}/rate")
-async def rate_document(
+@router.post("/{document_id}/like")
+async def like_document(
     document_id: str,
-    data: RateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not (1.0 <= data.rating <= 5.0):
-        raise HTTPException(status_code=400, detail="La note doit être entre 1 et 5")
     result = await db.execute(select(Document).where(Document.id == document_id))
     doc = result.scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=404, detail="Document introuvable")
-    # Moyenne glissante sans table dédiée
-    doc.rating = round(
-        (doc.rating * doc.ratings_count + data.rating) / (doc.ratings_count + 1), 2
+
+    existing = await db.execute(
+        select(DocumentLike).where(
+            DocumentLike.user_id == current_user.id,
+            DocumentLike.document_id == document_id,
+        )
     )
-    doc.ratings_count += 1
+    like = existing.scalar_one_or_none()
+    if like:
+        await db.delete(like)
+        doc.likes_count = max(0, doc.likes_count - 1)
+        liked = False
+    else:
+        db.add(DocumentLike(user_id=current_user.id, document_id=document_id))
+        doc.likes_count += 1
+        liked = True
+
+    if liked and doc.uploaded_by:
+        await push_notif(
+            db, doc.uploaded_by,
+            type="document_like",
+            title="J'aime sur votre sujet",
+            body=f"{current_user.full_name} a aimé votre sujet « {doc.title[:60]} »",
+            data={"document_id": document_id, "document_title": doc.title},
+            exclude_user_id=current_user.id,
+        )
     await db.commit()
-    return {"rating": doc.rating, "ratings_count": doc.ratings_count}
+    return {"liked": liked, "likes_count": doc.likes_count}
 
 
 @router.post("/upload", response_model=DocumentOut, status_code=201)

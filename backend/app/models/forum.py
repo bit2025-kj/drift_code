@@ -70,3 +70,17 @@ class DiscussionComment(Base):
     author = relationship("User", foreign_keys=[user_id])
     discussion = relationship("Discussion", back_populates="comments")
     replies = relationship("DiscussionComment", foreign_keys=[parent_id])
+
+
+class DiscussionLike(Base):
+    __tablename__ = "discussion_likes"
+
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), primary_key=True)
+    discussion_id: Mapped[str] = mapped_column(String(36), ForeignKey("discussions.id"), primary_key=True)
+
+
+class CommentLike(Base):
+    __tablename__ = "comment_likes"
+
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), primary_key=True)
+    comment_id: Mapped[str] = mapped_column(String(36), ForeignKey("discussion_comments.id"), primary_key=True)

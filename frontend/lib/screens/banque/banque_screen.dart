@@ -16,8 +16,11 @@ import 'package:nafa_edu/services/download_manager.dart';
 import 'package:nafa_edu/screens/main_shell.dart';
 import 'package:nafa_edu/screens/downloads_screen.dart';
 import 'package:nafa_edu/screens/ai_chat/ai_chat_screen.dart';
+import 'package:nafa_edu/services/sync_service.dart';
+import 'package:nafa_edu/widgets/network_error_widget.dart';
 import 'package:nafa_edu/screens/home/publish_sheet.dart';
-import 'package:nafa_edu/screens/home/home_screen.dart' show notificationsCountProvider;
+import 'package:nafa_edu/providers/notification_provider.dart';
+import 'package:nafa_edu/screens/notifications/notification_screen.dart';
 import 'package:shimmer/shimmer.dart';
 
 class BanqueScreen extends ConsumerStatefulWidget {
@@ -97,7 +100,7 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
     });
 
     final state = ref.watch(documentProvider);
-    final notifCount = ref.watch(notificationsCountProvider).valueOrNull ?? 0;
+    final notifCount = ref.watch(unreadCountProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -112,7 +115,12 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
           if (state.isLoading)
             const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
           else if (state.error != null)
-            SliverFillRemaining(child: Center(child: Text(state.error!)))
+            SliverFillRemaining(
+              child: OfflineAwareErrorWidget(
+                isOffline: !ref.watch(isOnlineProvider),
+                onRetry: _applyFilters,
+              ),
+            )
           else if (state.documents.isEmpty)
             SliverFillRemaining(
               child: Column(
@@ -165,28 +173,34 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
             child: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF495057)),
           ),
           const SizedBox(width: 8),
-          Stack(
-            children: [
-              Container(
-                width: 40, height: 40,
-                decoration: const BoxDecoration(color: Color(0xFFF1F3F5), shape: BoxShape.circle),
-                child: const Icon(Icons.notifications_outlined, size: 20, color: Color(0xFF495057)),
-              ),
-              if (notifCount > 0)
-                Positioned(
-                  top: 4, right: 4,
-                  child: Container(
-                    width: 16, height: 16,
-                    decoration: const BoxDecoration(color: Color(0xFFFA5252), shape: BoxShape.circle),
-                    child: Center(
-                      child: Text(
-                        notifCount > 9 ? '9+' : '$notifCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationScreen()),
+            ),
+            child: Stack(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: const BoxDecoration(color: Color(0xFFF1F3F5), shape: BoxShape.circle),
+                  child: const Icon(Icons.notifications_outlined, size: 20, color: Color(0xFF495057)),
+                ),
+                if (notifCount > 0)
+                  Positioned(
+                    top: 4, right: 4,
+                    child: Container(
+                      width: 16, height: 16,
+                      decoration: const BoxDecoration(color: Color(0xFFFA5252), shape: BoxShape.circle),
+                      child: Center(
+                        child: Text(
+                          notifCount > 9 ? '9+' : '$notifCount',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -742,7 +756,7 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
   String get _sortLabel {
     switch (_sortBy) {
       case 'popular': return 'Populaires';
-      case 'rating': return 'Mieux notés';
+      case 'likes': return 'Plus aimés';
       default: return 'Plus récents';
     }
   }
@@ -764,8 +778,8 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
             const SizedBox(height: 16),
             Text('Trier par', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
-            ...['recent', 'popular', 'rating'].map((v) {
-              final labels = {'recent': 'Plus récents', 'popular': 'Populaires', 'rating': 'Mieux notés'};
+            ...['recent', 'popular', 'likes'].map((v) {
+              final labels = {'recent': 'Plus récents', 'popular': 'Populaires', 'likes': 'Plus aimés'};
               final sel = _sortBy == v;
               return ListTile(
                 title: Text(labels[v]!, style: GoogleFonts.inter(fontWeight: sel ? FontWeight.w700 : FontWeight.w400)),
@@ -1254,10 +1268,10 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
                       Text(_formatCount(doc.downloadsCount),
                           style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF868E96))),
                       const SizedBox(width: 8),
-                      const Icon(Icons.star_rounded, size: 12, color: Color(0xFFFFD43B)),
+                      const Icon(Icons.favorite_rounded, size: 12, color: Color(0xFFE03131)),
                       const SizedBox(width: 3),
                       Text(
-                        '${doc.rating.toStringAsFixed(1)} (${doc.ratingsCount})',
+                        _formatCount(doc.likesCount),
                         style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF868E96)),
                       ),
                       if (doc.hasCorrige) ...[

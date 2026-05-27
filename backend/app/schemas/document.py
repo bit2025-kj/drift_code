@@ -16,14 +16,19 @@ class DocumentOut(BaseModel):
     has_corrige: bool
     downloads_count: int
     views_count: int
-    rating: float
-    ratings_count: int
+    likes_count: int = 0
     file_size_kb: int
     created_at: datetime
 
     file_url: str | None = None
     file_type: str | None = None
     thumbnail_url: str | None = None
+
+    corrige_url: str | None = None
+    corrige_file_type: str | None = None
+
+    uploader_name: str | None = None
+    uploader_avatar: str | None = None
 
     level_name: str | None = None
     classe_name: str | None = None
@@ -42,7 +47,7 @@ class DocumentFilter(BaseModel):
     has_corrige: bool | None = None
     is_official: bool | None = None
     q: str | None = None
-    sort_by: str = "recent"  # "recent", "popular", "rating"
+    sort_by: str = "recent"  # "recent", "popular", "likes"
     page: int = 1
     per_page: int = 20
 
