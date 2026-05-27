@@ -19,5 +19,5 @@ pypdfium2==5.8.0
 ddtrace==2.7.7
 datadog==0.49.1
 greenlet==3.0.3
-setuptools
+setuptools==75.6.0
 wheel
