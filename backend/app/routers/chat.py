@@ -1,357 +1,174 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone
-import asyncio
-import uuid
-
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel
 from app.database import get_db
-from app.models.user import User
-from app.models.chat import ConversationThread, ConversationMessage, ChatDocument
-from app.schemas.chat import (
-    ConversationThreadOut, ConversationDetailOut, ConversationMessageOut,
-    ChatDocumentOut, CreateConversationRequest, SendMessageRequest,
-    ChatMessageResponse
-)
-from app.utils.auth import get_current_user
+from app.models import User
+from app.models.education import EducationLevel, Classe
+from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
+from app.utils.auth import hash_password, verify_password, create_access_token, create_refresh_token, decode_token, get_current_user
+from datetime import datetime, timedelta, timezone
+import uuid, random, string
 from app.config import settings
-from mistralai import Mistral
-from app.services.chat_service import (
-    save_uploaded_file, process_document_file, generate_context_from_document
-)
 
-router = APIRouter(prefix="/ai", tags=["AI Chat"])
 
-_SYSTEM_PROMPT = """Tu es l’assistant IA officiel de Nafa Edu, une plateforme éducative destinée aux élèves et étudiants du Burkina Faso.
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
 
-Mission
-Tu aides les apprenants à :
-- Comprendre leurs cours (maths, sciences, français, histoire-géo, etc.)
-- Réviser efficacement leurs examens (BAC, BEPC, concours)
-- Résoudre des exercices et problèmes
-- Clarifier des notions scolaires ou académiques
 
-Règles de réponse
-- Réponds exclusivement en français clair et simple
-- Sois pédagogique, structuré et précis
-- Adapte toujours tes explications au niveau élève/étudiant
-- Utilise des exemples concrets liés au contexte africain quand c’est pertinent
+class ForgotPasswordRequest(BaseModel):
+    email: str
 
-Méthode d’explication
-1. Définition simple
-2. Explication étape par étape
-3. Exemple concret
-4. Mini-synthèse
 
-Format Markdown obligatoire
-- listes
-- **gras**
-- blocs code pour formules
-"""
+class ResetPasswordRequest(BaseModel):
+    email: str
+    code: str
+    new_password: str
 
-# ───────────────────────────── CONVERSATIONS ───────────────────────────── #
 
-@router.post("/conversations", response_model=ConversationThreadOut)
-async def create_conversation(
-    data: CreateConversationRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    thread = ConversationThread(
+# Stockage en mémoire des codes (suffisant pour démo hackathon)
+_reset_codes: dict[str, tuple[str, datetime]] = {}
+
+router = APIRouter(prefix="/auth", tags=["Authentification"])
+
+
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == data.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+
+    if data.phone:
+        result = await db.execute(select(User).where(User.phone == data.phone))
+        if result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Ce numéro de téléphone est déjà utilisé")
+
+    if data.level_id is not None:
+        lvl = await db.execute(select(EducationLevel).where(EducationLevel.id == data.level_id))
+        if not lvl.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Niveau scolaire invalide")
+
+    if data.classe_id is not None:
+        cls = await db.execute(select(Classe).where(Classe.id == data.classe_id))
+        if not cls.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Classe invalide")
+
+    user = User(
         id=str(uuid.uuid4()),
-        user_id=current_user.id,
-        title=data.title,
-        description=data.description,
+        full_name=data.full_name,
+        email=data.email,
+        password_hash=hash_password(data.password),
+        phone=data.phone,
+        level_id=data.level_id,
+        classe_id=data.classe_id,
+        ville=data.ville,
     )
-    db.add(thread)
-    await db.commit()
-    await db.refresh(thread)
-    return ConversationThreadOut.model_validate(thread)
-
-
-@router.get("/conversations", response_model=list[ConversationThreadOut])
-async def list_conversations(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    limit: int = 50,
-):
-    stmt = (
-        select(ConversationThread)
-        .where(ConversationThread.user_id == current_user.id)
-        .where(ConversationThread.is_active == True)
-        .order_by(desc(ConversationThread.last_message_at))
-        .limit(limit)
-    )
-    result = await db.execute(stmt)
-    return [ConversationThreadOut.model_validate(t) for t in result.scalars().all()]
-
-
-@router.get("/conversations/{thread_id}", response_model=ConversationDetailOut)
-async def get_conversation(
-    thread_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    stmt = (
-        select(ConversationThread)
-        .where(ConversationThread.id == thread_id)
-        .where(ConversationThread.user_id == current_user.id)
-        .options(
-            selectinload(ConversationThread.messages),
-            selectinload(ConversationThread.documents)
-        )
-    )
-
-    result = await db.execute(stmt)
-    thread = result.scalar_one_or_none()
-
-    if not thread:
-        raise HTTPException(status_code=404, detail="Conversation non trouvée")
-
-    return ConversationDetailOut(
-        id=thread.id,
-        title=thread.title,
-        description=thread.description,
-        is_active=thread.is_active,
-        created_at=thread.created_at,
-        updated_at=thread.updated_at,
-        last_message_at=thread.last_message_at,
-        messages=[ConversationMessageOut.model_validate(m) for m in thread.messages],
-        documents=[ChatDocumentOut.model_validate(d) for d in thread.documents],
-    )
-
-
-@router.delete("/conversations/{thread_id}")
-async def delete_conversation(
-    thread_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    stmt = select(ConversationThread).where(
-        ConversationThread.id == thread_id,
-        ConversationThread.user_id == current_user.id,
-    )
-
-    result = await db.execute(stmt)
-    thread = result.scalar_one_or_none()
-
-    if not thread:
-        raise HTTPException(status_code=404, detail="Conversation non trouvée")
-
-    thread.is_active = False
-    await db.commit()
-    return {"status": "deleted"}
-
-
-# ───────────────────────────── CHAT ───────────────────────────── #
-
-@router.post("/conversations/{thread_id}/messages", response_model=ChatMessageResponse)
-async def send_message(
-    thread_id: str,
-    data: SendMessageRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    stmt = select(ConversationThread).where(
-        ConversationThread.id == thread_id,
-        ConversationThread.user_id == current_user.id,
-    )
-
-    result = await db.execute(stmt)
-    thread = result.scalar_one_or_none()
-
-    if not thread:
-        raise HTTPException(status_code=404, detail="Conversation non trouvée")
-
-    # save user message
-    user_message = ConversationMessage(
-        id=str(uuid.uuid4()),
-        thread_id=thread_id,
-        role="user",
-        content=data.content,
-        document_id=data.document_id,
-    )
-    db.add(user_message)
-    await db.flush()
-
-    # document context
-    context_text = ""
-    if data.document_id:
-        doc_stmt = select(ChatDocument).where(ChatDocument.id == data.document_id)
-        doc_result = await db.execute(doc_stmt)
-        doc = doc_result.scalar_one_or_none()
-
-        if doc and doc.extracted_text:
-            context_text = doc.extracted_text[:2000]
-
-    if not settings.MISTRAL_API_KEY:
-        raise HTTPException(status_code=503, detail="Service IA non configuré")
-
+    db.add(user)
     try:
-        msg_stmt = (
-            select(ConversationMessage)
-            .where(ConversationMessage.thread_id == thread_id)
-            .order_by(ConversationMessage.created_at.asc())
-            .limit(10)
-        )
-
-        result = await db.execute(msg_stmt)
-        history = result.scalars().all()
-
-        messages = [
-            {
-                "role": m.role if m.role in ["user", "assistant"] else "user",
-                "content": m.content
-            }
-            for m in history
-        ]
-
-        # inject document as user message
-        if context_text:
-            messages.insert(0, {
-                "role": "user",
-                "content": f"DOCUMENT:\n{context_text}"
-            })
-
-        client = Mistral(api_key=settings.MISTRAL_API_KEY)
-
-        response = await asyncio.to_thread(
-            client.chat.complete,
-            model="mistral-large-latest",
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                *messages,
-            ],
-        )
-
-        reply = (
-            response.choices[0].message.content
-            if response.choices else "Erreur génération."
-        )
-
-        assistant_message = ConversationMessage(
-            id=str(uuid.uuid4()),
-            thread_id=thread_id,
-            role="assistant",
-            content=reply,
-        )
-
-        db.add(assistant_message)
-
-        thread.updated_at = datetime.now(timezone.utc)
-        thread.last_message_at = datetime.now(timezone.utc)
-
         await db.commit()
-        await db.refresh(assistant_message)
+        await db.refresh(user)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Données invalides (niveau ou classe introuvable)")
 
-        return ChatMessageResponse(
-            message_id=assistant_message.id,
-            reply=reply,
-            created_at=assistant_message.created_at,
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur IA: {str(e)}")
-
-
-# ───────────────────────────── UPLOAD ───────────────────────────── #
-
-@router.post("/conversations/{thread_id}/upload")
-async def upload_document(
-    thread_id: str,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    stmt = select(ConversationThread).where(
-        ConversationThread.id == thread_id,
-        ConversationThread.user_id == current_user.id,
+    return TokenResponse(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
+        user_id=user.id,
+        full_name=user.full_name,
+        is_teacher=user.is_teacher,
     )
 
-    result = await db.execute(stmt)
-    thread = result.scalar_one_or_none()
 
-    if not thread:
-        raise HTTPException(status_code=404, detail="Conversation non trouvée")
+@router.post("/login", response_model=TokenResponse)
+async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
 
-    allowed_types = {
-        "application/pdf": "pdf",
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/gif": "gif",
-        "image/webp": "webp",
-        "text/plain": "txt",
+    if not user or not verify_password(data.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé")
+
+    return TokenResponse(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
+        user_id=user.id,
+        full_name=user.full_name,
+        is_teacher=user.is_teacher,
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    user_id = decode_token(data.refresh_token, expected_type="refresh")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="Token invalide")
+
+    return TokenResponse(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
+        user_id=user.id,
+        full_name=user.full_name,
+        is_teacher=user.is_teacher,
+    )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(current_user: User = Depends(get_current_user)):
+    # JWT stateless : le client supprime ses tokens localement.
+    # Cette route confirme que le token était valide au moment de la déconnexion.
+    return
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+    # Ne pas révéler si l'email existe ou non
+    code = ''.join(random.choices(string.digits, k=6))
+    if user:
+        _reset_codes[data.email] = (code, datetime.now(timezone.utc) + timedelta(minutes=15))
+    return {
+        "message": "Si cet email est enregistré, un code de réinitialisation vous a été envoyé.",
+        "demo_code": code if (user and settings.DEBUG) else None,  # Visible en dev/démo uniquement
     }
 
-    content_type = (file.content_type or "").lower().strip()
-    file_type = allowed_types.get(content_type)
 
-    if not file_type:
-        raise HTTPException(status_code=400, detail="Format non supporté")
-
-    file_bytes = await file.read()
-    file_size = len(file_bytes)
-
-    max_size = settings.MAX_FILE_SIZE_MB * 1024 * 1024
-    if file_size > max_size:
-        raise HTTPException(status_code=413, detail="Fichier trop volumineux")
-
-    try:
-        relative_path = save_uploaded_file(
-            file_bytes,
-            file.filename or "document",
-            file_type,
-            current_user.id
-        )
-
-        extracted_text, page_count = process_document_file(
-            file_bytes,
-            file.filename or "document",
-            file_type
-        )
-
-        doc = ChatDocument(
-            id=str(uuid.uuid4()),
-            thread_id=thread_id,
-            user_id=current_user.id,
-            filename=relative_path,
-            original_filename=file.filename or "document",
-            file_type=file_type,
-            file_size=file_size,
-            extracted_text=extracted_text or None,
-            page_count=page_count,
-            is_processed=True,
-        )
-
-        db.add(doc)
-        await db.commit()
-        await db.refresh(doc)
-
-        return {
-            "document_id": doc.id,
-            "filename": doc.original_filename,
-            "file_type": file_type,
-            "page_count": page_count,
-            "extracted_text_length": len(extracted_text or ""),
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Le mot de passe doit contenir au moins 8 caractères")
+    entry = _reset_codes.get(data.email)
+    if not entry or entry[1] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Code invalide ou expiré")
+    if entry[0] != data.code:
+        raise HTTPException(status_code=400, detail="Code incorrect")
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    user.password_hash = hash_password(data.new_password)
+    await db.commit()
+    del _reset_codes[data.email]
+    return {"message": "Mot de passe réinitialisé avec succès"}
 
 
-@router.get("/conversations/{thread_id}/documents", response_model=list[ChatDocumentOut])
-async def list_documents(
-    thread_id: str,
+@router.patch("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    data: ChangePasswordRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    stmt = (
-        select(ChatDocument)
-        .where(ChatDocument.thread_id == thread_id)
-        .where(ChatDocument.user_id == current_user.id)
-        .order_by(desc(ChatDocument.created_at))
-    )
-
-    result = await db.execute(stmt)
-    return [ChatDocumentOut.model_validate(d) for d in result.scalars().all()]
+    if not verify_password(data.old_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Le nouveau mot de passe doit contenir au moins 8 caractères")
+    current_user.password_hash = hash_password(data.new_password)
+    await db.commit()
+    return
