@@ -215,7 +215,7 @@ async def review_teacher_request(
 
     req.status = data.status
     req.admin_note = data.admin_note
-    req.reviewed_at = datetime.now(timezone.utc)
+    req.reviewed_at = datetime.utcnow()
 
     if data.status == "approved" and req.user:
         req.user.is_teacher = True
@@ -354,7 +354,7 @@ async def resolve_report(
     report.status = data.status
     report.admin_note = data.admin_note
     report.resolved_by = admin.id
-    report.resolved_at = datetime.now(timezone.utc)
+    report.resolved_at = datetime.utcnow()
 
     if data.delete_content and data.status == "resolved":
         await _delete_content(db, report.content_type, report.content_id)
