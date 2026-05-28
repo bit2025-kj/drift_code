@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models import User, Document, Report
-from app.models.marketplace import Product, Purchase, TeacherRequest, TeacherProfile
+from app.models.marketplace import Product, Purchase, TeacherRequest
+from app.models.user import TeacherProfile
 from app.models.forum import Discussion
 from app.models.quiz import QuizSession
 from app.models.document import Favorite, Download
