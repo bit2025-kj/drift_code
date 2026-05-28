@@ -219,25 +219,25 @@ class _ReportCard extends ConsumerWidget {
       ),
     );
     if (confirm != true) return;
-    final ok = await ref.read(adminReportsProvider.notifier).resolveReport(
+    final err = await ref.read(adminReportsProvider.notifier).resolveReport(
           report.id, 'resolved',
           adminNote: noteController.text.isNotEmpty ? noteController.text : null,
           deleteContent: deleteContent,
         );
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok ? 'Signalement traité' : 'Erreur'),
-        backgroundColor: ok ? AppColors.success : AppColors.error,
+        content: Text(err == null ? 'Signalement traité' : 'Erreur: $err'),
+        backgroundColor: err == null ? AppColors.success : AppColors.error,
       ));
     }
   }
 
   Future<void> _dismiss(BuildContext context, WidgetRef ref) async {
-    final ok = await ref.read(adminReportsProvider.notifier).resolveReport(report.id, 'dismissed');
+    final err = await ref.read(adminReportsProvider.notifier).resolveReport(report.id, 'dismissed');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok ? 'Signalement rejeté' : 'Erreur'),
-        backgroundColor: ok ? AppColors.textSecondary : AppColors.error,
+        content: Text(err == null ? 'Signalement rejeté' : 'Erreur: $err'),
+        backgroundColor: err == null ? AppColors.textSecondary : AppColors.error,
       ));
     }
   }

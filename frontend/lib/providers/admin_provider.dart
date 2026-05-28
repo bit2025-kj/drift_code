@@ -366,7 +366,7 @@ class AdminReportsNotifier extends StateNotifier<AdminReportsState> {
     }
   }
 
-  Future<bool> resolveReport(String reportId, String status, {String? adminNote, bool deleteContent = false}) async {
+  Future<String?> resolveReport(String reportId, String status, {String? adminNote, bool deleteContent = false}) async {
     try {
       await _api.dio.patch(ApiEndpoints.adminReport(reportId), data: {
         'status': status,
@@ -374,10 +374,23 @@ class AdminReportsNotifier extends StateNotifier<AdminReportsState> {
         'delete_content': deleteContent,
       });
       state = state.copyWith(reports: state.reports.where((r) => r.id != reportId).toList());
-      return true;
-    } catch (_) {
-      return false;
+      return null;
+    } catch (e) {
+      final msg = _extractError(e);
+      state = state.copyWith(error: msg);
+      return msg;
     }
+  }
+
+  static String _extractError(Object e) {
+    try {
+      final dioErr = e as dynamic;
+      final detail = dioErr.response?.data?['detail'];
+      if (detail != null) return detail.toString();
+      final status = dioErr.response?.statusCode;
+      if (status != null) return 'Erreur $status';
+    } catch (_) {}
+    return e.toString();
   }
 }
 
@@ -432,16 +445,18 @@ class AdminTeacherRequestsNotifier extends StateNotifier<AdminTeacherRequestsSta
     }
   }
 
-  Future<bool> reviewRequest(String requestId, String status, {String? adminNote}) async {
+  Future<String?> reviewRequest(String requestId, String status, {String? adminNote}) async {
     try {
       await _api.dio.patch(ApiEndpoints.adminReviewTeacherRequest(requestId), data: {
         'status': status,
         if (adminNote != null) 'admin_note': adminNote,
       });
       state = state.copyWith(requests: state.requests.where((r) => r.id != requestId).toList());
-      return true;
-    } catch (_) {
-      return false;
+      return null;
+    } catch (e) {
+      final msg = AdminReportsNotifier._extractError(e);
+      state = state.copyWith(error: msg);
+      return msg;
     }
   }
 }

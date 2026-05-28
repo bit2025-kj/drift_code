@@ -255,16 +255,18 @@ class _RequestCard extends ConsumerWidget {
       ),
     );
     if (confirm != true) return;
-    final ok = await ref.read(adminTeacherRequestsProvider.notifier).reviewRequest(
+    final err = await ref.read(adminTeacherRequestsProvider.notifier).reviewRequest(
           request.id, status,
           adminNote: noteController.text.isNotEmpty ? noteController.text : null,
         );
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok
+        content: Text(err == null
             ? (status == 'approved' ? 'Demande approuvée ✓' : 'Demande refusée')
-            : 'Erreur lors du traitement'),
-        backgroundColor: ok ? (status == 'approved' ? AppColors.success : AppColors.textSecondary) : AppColors.error,
+            : 'Erreur: $err'),
+        backgroundColor: err == null
+            ? (status == 'approved' ? AppColors.success : AppColors.textSecondary)
+            : AppColors.error,
       ));
     }
   }

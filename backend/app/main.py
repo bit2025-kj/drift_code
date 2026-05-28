@@ -29,12 +29,18 @@ async def _apply_schema_migrations() -> None:
         # Teacher requests
         "ALTER TABLE teacher_requests ADD COLUMN IF NOT EXISTS document_url VARCHAR(500)",
         "ALTER TABLE teacher_requests ADD COLUMN IF NOT EXISTS admin_note TEXT",
+        "ALTER TABLE teacher_requests ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP",
+        "ALTER TABLE teacher_requests ADD COLUMN IF NOT EXISTS justification TEXT",
         # Documents
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS session VARCHAR(50)",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS ratings_count INTEGER DEFAULT 0",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS likes_count INTEGER DEFAULT 0",
         "ALTER TABLE downloads ADD COLUMN IF NOT EXISTS is_corrige BOOLEAN DEFAULT FALSE",
-        # Reports
+        # Reports — ensure columns exist (table may have been created without them)
+        "ALTER TABLE reports ADD COLUMN IF NOT EXISTS resolved_by VARCHAR(36)",
+        "ALTER TABLE reports ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP",
+        "ALTER TABLE reports ADD COLUMN IF NOT EXISTS admin_note TEXT",
+        # Reports (create if absent — safe no-op if already there)
         """CREATE TABLE IF NOT EXISTS reports (
             id VARCHAR(36) PRIMARY KEY,
             reporter_id VARCHAR(36) REFERENCES users(id),
