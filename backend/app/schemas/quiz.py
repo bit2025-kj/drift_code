@@ -52,7 +52,6 @@ class SubmitAnswerRequest(BaseModel):
 
 
 class SubmitSessionRequest(BaseModel):
-    session_id: str
     answers: dict  # {question_id: answer}
     duration_seconds: int = 0
 
