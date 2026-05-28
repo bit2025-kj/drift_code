@@ -1,9 +1,6 @@
-import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:nafa_edu/config/constants.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 
@@ -135,20 +132,17 @@ class ForumMediaGrid extends StatelessWidget {
     );
   }
 
-  Future<void> _openVideo(String url) async {
+  Future<void> _openExternal(BuildContext context, String url) async {
     final uri = Uri.parse(_fullUrl(url));
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
-  }
-
-  void _openPdf(BuildContext context, String url) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _ForumPdfScreen(url: _fullUrl(url)),
-      ),
-    );
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible d\'ouvrir le fichier')),
+        );
+      }
+    }
   }
 
   Widget _mediaItem(BuildContext context, String url,
@@ -157,7 +151,7 @@ class ForumMediaGrid extends StatelessWidget {
 
     if (_isVideo(url)) {
       return GestureDetector(
-        onTap: () => _openVideo(url),
+        onTap: () => _openExternal(context, url),
         child: ClipRRect(
           borderRadius: br,
           child: Container(
@@ -181,7 +175,7 @@ class ForumMediaGrid extends StatelessWidget {
 
     if (_isPdf(url)) {
       return GestureDetector(
-        onTap: () => _openPdf(context, url),
+        onTap: () => _openExternal(context, url),
         child: ClipRRect(
           borderRadius: br,
           child: Container(
@@ -329,112 +323,6 @@ class ForumMediaGrid extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ── Forum PDF viewer screen ───────────────────────────────────────────────────
-
-class _ForumPdfScreen extends StatefulWidget {
-  final String url;
-  const _ForumPdfScreen({required this.url});
-
-  @override
-  State<_ForumPdfScreen> createState() => _ForumPdfScreenState();
-}
-
-class _ForumPdfScreenState extends State<_ForumPdfScreen> {
-  Uint8List? _bytes;
-  bool _loading = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final response = await Dio().get<List<int>>(
-        widget.url,
-        options: Options(responseType: ResponseType.bytes),
-      );
-      if (mounted) {
-        setState(() {
-          _bytes = Uint8List.fromList(response.data!);
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: const Text('Document', style: TextStyle(fontSize: 15)),
-        actions: [
-          if (!_loading && _error == null)
-            IconButton(
-              icon: const Icon(Icons.open_in_new_rounded),
-              tooltip: 'Ouvrir dans le navigateur',
-              onPressed: () async {
-                final uri = Uri.parse(widget.url);
-                try {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                } catch (_) {}
-              },
-            ),
-        ],
-      ),
-      body: _loading
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: Colors.white54),
-                  SizedBox(height: 14),
-                  Text('Chargement…',
-                      style: TextStyle(color: Colors.white54, fontSize: 13)),
-                ],
-              ),
-            )
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.cloud_off_rounded,
-                            color: Colors.white38, size: 48),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Impossible de charger le document',
-                          style: TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w700),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            setState(() { _loading = true; _error = null; });
-                            _load();
-                          },
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Réessayer'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : SfPdfViewer.memory(_bytes!),
     );
   }
 }

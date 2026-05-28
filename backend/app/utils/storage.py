@@ -41,14 +41,15 @@ async def upload_file(content: bytes, path: str, resource_type: str = "auto") ->
 
 def _upload_cloudinary_sync(content: bytes, path: str, resource_type: str) -> str:
     import cloudinary.uploader
+    # Keep the full path including extension as public_id so the returned URL
+    # preserves the extension (e.g. .pdf, .mp4) — needed for type detection in Flutter.
     public_id = path.replace("\\", "/")
-    if "." in os.path.basename(public_id):
-        public_id = os.path.splitext(public_id)[0]
     result = cloudinary.uploader.upload(
         content,
         public_id=public_id,
         resource_type=resource_type,
         overwrite=True,
+        use_filename=False,
     )
     return result["secure_url"]
 
