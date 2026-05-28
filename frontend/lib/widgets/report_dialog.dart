@@ -49,9 +49,12 @@ class _ReportSheetState extends State<_ReportSheet> {
     if (_selectedReason == null) return;
     setState(() => _isLoading = true);
     try {
-      final endpoint = widget.contentType == 'document'
-          ? ApiEndpoints.reportDocument(widget.contentId)
-          : ApiEndpoints.reportProduct(widget.contentId);
+      final endpoint = switch (widget.contentType) {
+        'document'   => ApiEndpoints.reportDocument(widget.contentId),
+        'product'    => ApiEndpoints.reportProduct(widget.contentId),
+        'discussion' => ApiEndpoints.reportDiscussion(widget.contentId),
+        _            => ApiEndpoints.reportDocument(widget.contentId),
+      };
       await ApiClient.instance.dio.post(endpoint, data: {
         'reason': _selectedReason,
         if (_descController.text.isNotEmpty) 'description': _descController.text.trim(),

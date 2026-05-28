@@ -410,6 +410,9 @@ async def _get_content_title(db: AsyncSession, content_type: str, content_id: st
     if content_type == "product":
         res = await db.execute(select(Product.title).where(Product.id == content_id))
         return res.scalar_one_or_none()
+    if content_type == "discussion":
+        res = await db.execute(select(Discussion.title).where(Discussion.id == content_id))
+        return res.scalar_one_or_none()
     return None
 
 
@@ -424,3 +427,8 @@ async def _delete_content(db: AsyncSession, content_type: str, content_id: str):
         product = res.scalar_one_or_none()
         if product:
             await db.delete(product)
+    elif content_type == "discussion":
+        res = await db.execute(select(Discussion).where(Discussion.id == content_id))
+        disc = res.scalar_one_or_none()
+        if disc:
+            disc.is_active = False  # soft delete

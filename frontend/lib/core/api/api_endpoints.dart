@@ -116,4 +116,5 @@ class ApiEndpoints {
   // ── Signalement ───────────────────────────────────────────────────────────────
   static String reportDocument(String id) => '/documents/$id/report';
   static String reportProduct(String id) => '/marketplace/$id/report';
+  static String reportDiscussion(String id) => '/forum/$id/report';
 }

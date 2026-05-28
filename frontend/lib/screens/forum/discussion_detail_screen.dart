@@ -7,6 +7,7 @@ import 'package:nafa_edu/core/api/api_endpoints.dart';
 import 'package:nafa_edu/models/forum_model.dart';
 import 'package:nafa_edu/providers/forum_provider.dart';
 import 'package:nafa_edu/screens/forum/forum_widgets.dart';
+import 'package:nafa_edu/widgets/report_dialog.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kTimestampColor = Color(0xFF65676B);
@@ -182,6 +183,27 @@ class _DiscussionDetailScreenState
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary),
         ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'report') {
+                showReportDialog(context,
+                    contentType: 'discussion',
+                    contentId: widget.discussionId);
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(children: [
+                  Icon(Icons.flag_outlined, size: 18, color: AppColors.error),
+                  SizedBox(width: 8),
+                  Text('Signaler'),
+                ]),
+              ),
+            ],
+          ),
+        ],
       ),
       body: detailAsync.when(
         loading: () => const Center(

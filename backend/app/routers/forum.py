@@ -8,11 +8,12 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.models import Discussion, DiscussionComment, ForumCategory, User, DiscussionLike, CommentLike
+from app.models import Discussion, DiscussionComment, ForumCategory, User, DiscussionLike, CommentLike, Report
 from app.schemas.forum import (
     DiscussionCreate, CommentCreate, DiscussionOut, DiscussionDetail,
     ForumStats, AuthorOut, CommentOut,
 )
+from app.schemas.admin import ReportCreate
 from app.utils.auth import get_current_user, get_optional_user
 from app.utils.notify import push_notif
 
@@ -373,3 +374,39 @@ async def delete_discussion(
     disc.is_active = False
     await db.commit()
     return
+
+
+# ── Signalement ───────────────────────────────────────────────────────────────
+
+@router.post("/{discussion_id}/report", status_code=201)
+async def report_discussion(
+    discussion_id: str,
+    data: ReportCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    disc = (await db.execute(select(Discussion).where(Discussion.id == discussion_id))).scalar_one_or_none()
+    if not disc:
+        raise HTTPException(status_code=404, detail="Discussion introuvable")
+
+    existing = await db.execute(
+        select(Report).where(
+            Report.reporter_id == current_user.id,
+            Report.content_type == "discussion",
+            Report.content_id == discussion_id,
+            Report.status == "pending",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Vous avez déjà signalé cette publication")
+
+    db.add(Report(
+        id=str(uuid.uuid4()),
+        reporter_id=current_user.id,
+        content_type="discussion",
+        content_id=discussion_id,
+        reason=data.reason,
+        description=data.description,
+    ))
+    await db.commit()
+    return {"message": "Signalement envoyé, merci pour votre contribution"}
