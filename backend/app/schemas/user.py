@@ -12,6 +12,7 @@ class UserProfile(BaseModel):
     classe_id: int | None
     ville: str | None
     is_teacher: bool
+    is_admin: bool
     points: int
     active_days: int
     current_streak: int
