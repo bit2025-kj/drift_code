@@ -67,8 +67,9 @@ class AppConstants {
   static const appTagline = 'Révise. Apprends. Réussis.';
 
   // API
-  static const baseUrl = 'http://192.168.100.62:8000';
-  static const apiTimeout = Duration(seconds: 30);
+  static const baseUrl = 'https://nafa-edu-backend.onrender.com';
+  // Render free tier peut mettre 50-60s à se réveiller — 90s laisse une marge
+  static const apiTimeout = Duration(seconds: 90);
 
   // Cache
   static const cacheDuration = Duration(minutes: 15);

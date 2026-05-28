@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   AppColors._();
@@ -38,6 +37,14 @@ class AppColors {
   static const gradientEnd = Color(0xFF4DABF7);
 }
 
+// Shorthand to avoid repeating fontFamily on every TextStyle
+TextStyle _p(double size, FontWeight weight, [Color? color]) => TextStyle(
+      fontFamily: 'Poppins',
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+    );
+
 class AppTheme {
   AppTheme._();
 
@@ -53,28 +60,27 @@ class AppTheme {
         error: AppColors.error,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      textTheme: GoogleFonts.poppinsTextTheme().copyWith(
-        displayLarge: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-        displayMedium: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-        displaySmall: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        headlineLarge: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        headlineMedium: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        headlineSmall: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        bodyLarge: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w400, color: AppColors.textPrimary),
-        bodyMedium: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w400, color: AppColors.textPrimary),
-        bodySmall: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
-        labelLarge: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
-        labelMedium: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500),
-        labelSmall: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w500),
+      fontFamily: 'Poppins',
+      textTheme: TextTheme(
+        displayLarge:  _p(32, FontWeight.w700, AppColors.textPrimary),
+        displayMedium: _p(24, FontWeight.w700, AppColors.textPrimary),
+        displaySmall:  _p(20, FontWeight.w600, AppColors.textPrimary),
+        headlineLarge:  _p(18, FontWeight.w600, AppColors.textPrimary),
+        headlineMedium: _p(16, FontWeight.w600, AppColors.textPrimary),
+        headlineSmall:  _p(14, FontWeight.w600, AppColors.textPrimary),
+        bodyLarge:  _p(16, FontWeight.w400, AppColors.textPrimary),
+        bodyMedium: _p(14, FontWeight.w400, AppColors.textPrimary),
+        bodySmall:  _p(12, FontWeight.w400, AppColors.textSecondary),
+        labelLarge:  _p(14, FontWeight.w600),
+        labelMedium: _p(12, FontWeight.w500),
+        labelSmall:  _p(10, FontWeight.w500),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.poppins(
-          fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary,
-        ),
+        titleTextStyle: _p(18, FontWeight.w700, AppColors.textPrimary),
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
@@ -92,7 +98,7 @@ class AppTheme {
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: _p(14, FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -101,7 +107,7 @@ class AppTheme {
           side: const BorderSide(color: AppColors.primary, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: _p(14, FontWeight.w600),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -124,14 +130,14 @@ class AppTheme {
           borderSide: const BorderSide(color: AppColors.error, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        hintStyle: GoogleFonts.poppins(fontSize: 14, color: AppColors.textHint),
+        hintStyle: _p(14, FontWeight.w400, AppColors.textHint),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceVariant,
-        selectedColor: AppColors.primary.withOpacity(0.12),
+        selectedColor: AppColors.primary.withValues(alpha: 0.12),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        labelStyle: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
+        labelStyle: _p(13, FontWeight.w500),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
@@ -147,5 +153,5 @@ class AppTheme {
 
 // Extension utilitaire
 extension ColorX on Color {
-  Color withOpacityX(double opacity) => withOpacity(opacity);
+  Color withOpacityX(double opacity) => withValues(alpha: opacity);
 }

@@ -25,6 +25,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String? _selectedVille;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authProvider.notifier).warmUp();
+    });
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();

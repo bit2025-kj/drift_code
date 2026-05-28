@@ -21,6 +21,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Réveille Render en arrière-plan pendant que l'utilisateur remplit le formulaire
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authProvider.notifier).warmUp();
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();

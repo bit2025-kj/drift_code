@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -17,6 +18,16 @@ class Settings(BaseSettings):
     MISTRAL_API_KEY: str = ""
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE_MB: int = 50
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_db_url(cls, v: str) -> str:
+        # Render / Heroku provide postgres:// or postgresql:// — asyncpg needs postgresql+asyncpg://
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://") and "+asyncpg" not in v:
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     class Config:
         env_file = ".env"

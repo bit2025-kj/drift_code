@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nafa_edu/core/api/api_client.dart';
 import 'package:nafa_edu/core/api/api_endpoints.dart';
@@ -111,11 +112,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   String _parseError(dynamic e) {
-    try {
-      final data = (e as dynamic).response?.data;
-      if (data is Map && data['detail'] != null) return data['detail'].toString();
-    } catch (_) {}
+    if (e is DioException) {
+      switch (e.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.receiveTimeout:
+        case DioExceptionType.sendTimeout:
+          return 'Le serveur met du temps à répondre (démarrage Render). Réessayez dans quelques secondes.';
+        case DioExceptionType.connectionError:
+          return 'Impossible de joindre le serveur. Vérifiez votre connexion internet.';
+        default:
+          final data = e.response?.data;
+          if (data is Map && data['detail'] != null) return data['detail'].toString();
+          final status = e.response?.statusCode;
+          if (status != null) return 'Erreur serveur ($status). Réessayez.';
+      }
+    }
     return 'Une erreur est survenue. Vérifiez votre connexion.';
+  }
+
+  /// Ping silencieux pour réveiller Render avant une action utilisateur.
+  Future<void> warmUp() async {
+    try {
+      await _api.dio.get('/health',
+          options: Options(sendTimeout: const Duration(seconds: 90), receiveTimeout: const Duration(seconds: 90)));
+    } catch (_) {}
   }
 }
 
