@@ -4,7 +4,6 @@ import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/config/constants.dart';
 import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/providers/education_provider.dart';
-import 'package:nafa_edu/screens/main_shell.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -56,14 +55,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     if (mounted) {
       setState(() => _isLoading = false);
-      if (success) {
-        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const MainShell()), (_) => false);
-      } else {
+      if (!success) {
         final error = ref.read(authProvider).error;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error ?? "Erreur d'inscription"), backgroundColor: AppColors.error),
         );
       }
+      // Routing handled by _AuthGate watching authProvider
     }
   }
 

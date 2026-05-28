@@ -258,7 +258,11 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
                             children: [
                               const Icon(Icons.location_on_outlined, color: Colors.white70, size: 12),
                               const SizedBox(width: 2),
-                              Text(user.ville!, style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11)),
+                              Flexible(
+                                child: Text(user.ville!,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 11)),
+                              ),
                             ],
                           ),
                         ],

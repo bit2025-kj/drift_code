@@ -4,7 +4,6 @@ import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/screens/auth/register_screen.dart';
 import 'package:nafa_edu/screens/auth/forgot_password_screen.dart';
-import 'package:nafa_edu/screens/main_shell.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -45,14 +44,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
     if (mounted) {
       setState(() => _isLoading = false);
-      if (success) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainShell()));
-      } else {
+      if (!success) {
         final error = ref.read(authProvider).error;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error ?? 'Erreur de connexion'), backgroundColor: AppColors.error),
         );
       }
+      // Routing handled by _AuthGate watching authProvider
     }
   }
 

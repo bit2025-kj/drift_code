@@ -117,30 +117,33 @@ class HomeScreen extends ConsumerWidget {
         children: [
           SvgPicture.asset('assets/icons/logo_book.svg', width: 44, height: 44),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Nafa ',
-                      style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: const Color(0xFF1A1D23)),
-                    ),
-                    TextSpan(
-                      text: 'Edu',
-                      style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: const Color(0xFFF76707)),
-                    ),
-                  ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Nafa ',
+                        style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: const Color(0xFF1A1D23)),
+                      ),
+                      TextSpan(
+                        text: 'Edu',
+                        style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: const Color(0xFFF76707)),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Text(
-                firstName.isNotEmpty ? 'Bonjour, $firstName 👋' : 'Révise. Apprends. Réussis.',
-                style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF868E96), fontWeight: FontWeight.w500),
-              ),
-            ],
+                Text(
+                  firstName.isNotEmpty ? 'Bonjour, $firstName 👋' : 'Révise. Apprends. Réussis.',
+                  style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF868E96), fontWeight: FontWeight.w500),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           GestureDetector(
             onTap: () => Navigator.push(
               context,
