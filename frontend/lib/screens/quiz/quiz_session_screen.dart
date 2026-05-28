@@ -7,6 +7,7 @@ import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/core/api/api_client.dart';
 import 'package:nafa_edu/core/api/api_endpoints.dart';
 import 'package:nafa_edu/models/quiz_model.dart';
+import 'package:nafa_edu/providers/quiz_provider.dart';
 import 'package:nafa_edu/services/quiz_history_storage.dart';
 
 class QuizSessionScreen extends ConsumerStatefulWidget {
@@ -101,14 +102,14 @@ class _QuizSessionScreenState extends ConsumerState<QuizSessionScreen> {
         data: {'answers': _answers, 'duration_seconds': elapsed},
       );
       final result = QuizSessionResult.fromJson(res.data);
-      _saveToHistory(result);
+      await _saveToHistory(result);
       if (mounted) setState(() { _result = result; _isSubmitting = false; });
     } catch (_) {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  void _saveToHistory(QuizSessionResult result) {
+  Future<void> _saveToHistory(QuizSessionResult result) async {
     final entry = QuizHistoryEntry(
       sessionId: widget.sessionId,
       quizId: widget.quiz.id,
@@ -129,7 +130,8 @@ class _QuizSessionScreenState extends ConsumerState<QuizSessionScreen> {
       )).toList(),
       answers: Map<String, String>.from(_answers),
     );
-    QuizHistoryStorage.save(entry);
+    await QuizHistoryStorage.save(entry);
+    if (mounted) ref.invalidate(localQuizHistoryProvider);
   }
 
   @override
@@ -724,25 +726,46 @@ class _ResultScreen extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ── Action ───────────────────────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton.icon(
-                onPressed: () =>
-                    Navigator.of(context).popUntil((r) => r.isFirst),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(
-                  'Nouveau quiz',
-                  style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700, fontSize: 14),
+            // ── Actions ──────────────────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.replay_rounded, size: 18),
+                      label: Text(
+                        'Recommencer',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: Text(
+                        'Nouveau quiz',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

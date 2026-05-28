@@ -276,6 +276,48 @@ def _extract_pdf_text(content: bytes) -> tuple[str, int]:
         raise HTTPException(status_code=422, detail=f"Impossible de lire le PDF: {str(e)}")
 
 
+async def _describe_image_with_ai(image_bytes: bytes, media_type: str) -> str:
+    """Use Mistral pixtral to transcribe the full content of an image document."""
+    if not settings.MISTRAL_API_KEY:
+        return "[Document image joint - analyse IA non disponible]"
+
+    import base64
+    valid_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if media_type not in valid_types:
+        media_type = "image/jpeg"
+
+    image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+    try:
+        client = Mistral(api_key=settings.MISTRAL_API_KEY)
+        message = await client.chat.complete_async(
+            model="pixtral-large-latest",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{media_type};base64,{image_b64}"},
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "Tu es un professeur expert du système éducatif du Burkina Faso.\n"
+                            "Analyse ce document scolaire et retranscris INTÉGRALEMENT son contenu.\n\n"
+                            "Extrait tout le texte visible : énoncés, questions, données, formules, tableaux, "
+                            "schémas (décrits en détail). Si c'est un sujet d'examen, liste tous les exercices "
+                            "et questions avec leurs numéros. Préserve la structure du document autant que possible. "
+                            "N'omets aucune information visible."
+                        ),
+                    },
+                ],
+            }],
+        )
+        return message.choices[0].message.content
+    except Exception as e:
+        print(f"❌ Analyse image document échouée: {e}")
+        return "[Document image joint - le contenu n'a pas pu être extrait automatiquement]"
+
+
 @router.post("/upload-document", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
@@ -296,12 +338,8 @@ async def upload_document(
         return DocumentUploadResponse(text=text, filename=filename, page_count=page_count, is_image=False)
 
     if is_image:
-        return DocumentUploadResponse(
-            text="[Document image joint]",
-            filename=filename,
-            page_count=1,
-            is_image=True,
-        )
+        text = await _describe_image_with_ai(content, content_type or "image/jpeg")
+        return DocumentUploadResponse(text=text, filename=filename, page_count=1, is_image=True)
 
     raise HTTPException(status_code=415, detail="Format non supporté. Utilisez un PDF ou une image.")
 

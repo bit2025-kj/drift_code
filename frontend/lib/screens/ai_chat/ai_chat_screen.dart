@@ -88,6 +88,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
   bool _isLoading = false;
   bool _isStreaming = false; // true once first token arrives
   bool _isUploading = false;
+  bool _autoSentInitial = false;
   String _sessionId = '';
   _AttachedDoc? _attachedDoc;
 
@@ -130,33 +131,80 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   // ── Document from card ────────────────────────────────────────────────────────
 
-  void _initWithDocument(DocumentModel doc) {
-    final parts = <String>[
-      if (doc.matiereName != null) doc.matiereName!,
-      if (doc.typeExamenName != null) doc.typeExamenName!,
-      if (doc.classeName != null) doc.classeName!,
-      if (doc.annee != null) '${doc.annee}',
-    ];
-    final contextText = [
-      'Titre: ${doc.title}',
-      if (doc.matiereName != null) 'Matière: ${doc.matiereName}',
-      if (doc.classeName != null) 'Classe: ${doc.classeName}',
-      if (doc.levelName != null) 'Niveau: ${doc.levelName}',
-      if (doc.typeExamenName != null) "Type d'examen: ${doc.typeExamenName}",
-      if (doc.annee != null) 'Année: ${doc.annee}',
-      if (doc.hasCorrige) 'Corrigé disponible: Oui',
-    ].join('\n');
+  Future<void> _initWithDocument(DocumentModel doc) async {
+    // Set metadata as immediate fallback (direct assignment before first build)
+    _attachedDoc = _AttachedDoc(
+      filename: doc.title,
+      extractedText: [
+        'Titre: ${doc.title}',
+        if (doc.matiereName != null) 'Matière: ${doc.matiereName}',
+        if (doc.classeName != null) 'Classe: ${doc.classeName}',
+        if (doc.levelName != null) 'Niveau: ${doc.levelName}',
+        if (doc.typeExamenName != null) "Type d'examen: ${doc.typeExamenName}",
+        if (doc.annee != null) 'Année: ${doc.annee}',
+        if (doc.hasCorrige) 'Corrigé disponible: Oui',
+      ].join('\n'),
+      isImage: doc.isImage,
+      pageCount: 1,
+    );
 
-    setState(() {
-      _attachedDoc = _AttachedDoc(
-        filename: doc.title,
-        extractedText: contextText,
-        isImage: doc.isImage,
-        pageCount: 1,
+    if (doc.fileUrl == null || doc.fileUrl!.isEmpty) {
+      _triggerInitialSend(doc);
+      return;
+    }
+
+    _isUploading = true; // set before first build so banner shows spinner
+
+    try {
+      final res = await ApiClient.instance.dio.get(
+        doc.fileUrl!,
+        options: Options(responseType: ResponseType.bytes),
       );
-    });
+      if (!mounted) return;
 
+      final rawData = res.data;
+      final bytes = rawData is Uint8List ? rawData : Uint8List.fromList(rawData as List<int>);
+      final uri = Uri.parse(doc.fileUrl!);
+      final ext = uri.path.contains('.') ? uri.path.split('.').last.toLowerCase() : 'pdf';
+      final mf = MultipartFile.fromBytes(bytes, filename: '${doc.title}.$ext');
+
+      final uploadRes = await ApiClient.instance.dio.post(
+        ApiEndpoints.aiUploadDocument,
+        data: FormData.fromMap({'file': mf}),
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      if (!mounted) return;
+
+      final data = uploadRes.data as Map<String, dynamic>;
+      setState(() {
+        _attachedDoc = _AttachedDoc(
+          filename: data['filename'] as String? ?? doc.title,
+          extractedText: data['text'] as String? ?? '',
+          isImage: data['is_image'] as bool? ?? false,
+          pageCount: data['page_count'] as int? ?? 1,
+        );
+        _isUploading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isUploading = false);
+      // _attachedDoc already holds metadata fallback
+    }
+
+    _triggerInitialSend(doc);
+  }
+
+  void _triggerInitialSend(DocumentModel doc) {
+    if (_autoSentInitial) return;
+    _autoSentInitial = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final parts = <String>[
+        if (doc.matiereName != null) doc.matiereName!,
+        if (doc.typeExamenName != null) doc.typeExamenName!,
+        if (doc.classeName != null) doc.classeName!,
+        if (doc.annee != null) '${doc.annee}',
+      ];
       final subjectLine = parts.isNotEmpty ? parts.join(' · ') : doc.title;
       _controller.text = "Aide-moi à analyser ce sujet : $subjectLine";
       _send();
@@ -559,10 +607,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
           Container(
             width: 32, height: 32,
             decoration: BoxDecoration(color: const Color(0xFF3B5BDB).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-            child: Icon(
-              doc.isImage ? Icons.image_rounded : Icons.picture_as_pdf_rounded,
-              color: const Color(0xFF3B5BDB), size: 16,
-            ),
+            child: _isUploading
+                ? const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B5BDB))))
+                : Icon(doc.isImage ? Icons.image_rounded : Icons.picture_as_pdf_rounded, color: const Color(0xFF3B5BDB), size: 16),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -573,7 +620,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1A1D23)),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
                 Text(
-                  [doc.matiereName, doc.classeName, doc.annee?.toString()].where((e) => e != null).join(' · '),
+                  _isUploading
+                      ? 'Lecture du document...'
+                      : [doc.matiereName, doc.classeName, doc.annee?.toString()].where((e) => e != null).join(' · '),
                   style: GoogleFonts.inter(fontSize: 10, color: const Color(0xFF495057)),
                 ),
               ],
@@ -581,8 +630,17 @@ class _AiChatScreenState extends State<AiChatScreen> {
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: const Color(0xFF3B5BDB).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: Text('Sujet joint', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: const Color(0xFF3B5BDB))),
+            decoration: BoxDecoration(
+              color: _isUploading ? const Color(0xFFE9ECEF) : const Color(0xFF3B5BDB).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _isUploading ? 'Chargement...' : 'Sujet joint',
+              style: GoogleFonts.inter(
+                fontSize: 9, fontWeight: FontWeight.w700,
+                color: _isUploading ? const Color(0xFF868E96) : const Color(0xFF3B5BDB),
+              ),
+            ),
           ),
         ],
       ),

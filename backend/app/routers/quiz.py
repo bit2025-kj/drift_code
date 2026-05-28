@@ -93,11 +93,11 @@ async def generate_quiz(
     db.add(session)
     await db.commit()
 
-    from app.schemas.quiz import QuestionOut
+    from app.schemas.quiz import QuestionWithAnswer
     return StartSessionResponse(
         session_id=session.id,
         quiz=_enrich_quiz(quiz),
-        questions=[QuestionOut.model_validate(q) for q in question_objects],
+        questions=[QuestionWithAnswer.model_validate(q) for q in question_objects],
     )
 
 
@@ -268,10 +268,10 @@ async def generate_quiz_from_file(
     db.add(session)
     await db.commit()
 
-    from app.schemas.quiz import QuestionOut
+    from app.schemas.quiz import QuestionWithAnswer
     return StartSessionResponse(
         session_id=session.id, quiz=_enrich_quiz(quiz),
-        questions=[QuestionOut.model_validate(q) for q in question_objects],
+        questions=[QuestionWithAnswer.model_validate(q) for q in question_objects],
     )
 
 
@@ -342,10 +342,10 @@ async def generate_quiz_from_profile(
     db.add(session)
     await db.commit()
 
-    from app.schemas.quiz import QuestionOut
+    from app.schemas.quiz import QuestionWithAnswer
     return StartSessionResponse(
         session_id=session.id, quiz=_enrich_quiz(quiz),
-        questions=[QuestionOut.model_validate(q) for q in question_objects],
+        questions=[QuestionWithAnswer.model_validate(q) for q in question_objects],
     )
 
 
@@ -416,11 +416,11 @@ async def get_quiz(
     db.add(session)
     await db.commit()
 
-    from app.schemas.quiz import QuestionOut
+    from app.schemas.quiz import QuestionWithAnswer
     return StartSessionResponse(
         session_id=session.id,
         quiz=_enrich_quiz(quiz),
-        questions=[QuestionOut.model_validate(q) for q in sorted(quiz.questions, key=lambda x: x.order)],
+        questions=[QuestionWithAnswer.model_validate(q) for q in sorted(quiz.questions, key=lambda x: x.order)],
     )
 
 

@@ -42,7 +42,7 @@ class GenerateQuizRequest(BaseModel):
 class StartSessionResponse(BaseModel):
     session_id: str
     quiz: QuizOut
-    questions: list[QuestionOut]
+    questions: list[QuestionWithAnswer]
 
 
 class SubmitAnswerRequest(BaseModel):
