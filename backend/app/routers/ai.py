@@ -1,18 +1,16 @@
+import json
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.utils.auth import get_current_user
 from app.models.user import User
 from app.config import settings
-from mistralai import Mistral
-import asyncio
-import json
+from mistralai.client import MistralClient
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
-# ───────────────────────── SYSTEM PROMPT ───────────────────────── #
-
-_SYSTEM_PROMPT = """# SYSTEM PROMPT — 
+_SYSTEM_PROMPT = """# SYSTEM PROMPT — NAFA EDU AI
 
 Tu es **Nafa Edu AI**, l’assistant pédagogique intelligent de la plateforme éducative Nafa Edu destinée aux élèves, étudiants et candidats aux concours du Burkina Faso.
 
@@ -235,13 +233,12 @@ Chaque réponse doit :
 * être agréable à lire sur mobile
 * faciliter la mémorisation
 * encourager l’apprentissage autonome
-* donner envie d’apprendre"""
+* donner envie d’apprendre
+"""
 
-
-# ───────────────────────── MODELS ───────────────────────── #
 
 class ChatMessage(BaseModel):
-    role: str
+    role: str  # "user" | "assistant"
     content: str
 
 
@@ -254,7 +251,60 @@ class ChatResponse(BaseModel):
     reply: str
 
 
-# ───────────────────────── CHAT (NON STREAM) ───────────────────────── #
+class DocumentUploadResponse(BaseModel):
+    text: str
+    filename: str
+    page_count: int
+    is_image: bool
+
+
+def _extract_pdf_text(content: bytes) -> tuple[str, int]:
+    """Extract text from PDF bytes. Returns (text, page_count)."""
+    try:
+        import pypdfium2 as pdfium
+        doc = pdfium.PdfDocument(content)
+        page_count = len(doc)
+        texts = []
+        for i in range(min(page_count, 15)):
+            page = doc.get_page(i)
+            textpage = page.get_textpage()
+            text = textpage.get_text_range()
+            if text and text.strip():
+                texts.append(f"[Page {i + 1}]\n{text.strip()}")
+        return '\n\n'.join(texts), page_count
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Impossible de lire le PDF: {str(e)}")
+
+
+@router.post("/upload-document", response_model=DocumentUploadResponse)
+async def upload_document(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload a PDF or image and extract its text content for AI analysis."""
+    content = await file.read()
+    filename = file.filename or "document"
+    content_type = file.content_type or ""
+
+    is_image = content_type.startswith("image/") or filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
+    is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf")
+
+    if is_pdf:
+        text, page_count = _extract_pdf_text(content)
+        if not text.strip():
+            text = "[Ce PDF ne contient pas de texte extractible — il est probablement scanné en image.]"
+        return DocumentUploadResponse(text=text, filename=filename, page_count=page_count, is_image=False)
+
+    if is_image:
+        return DocumentUploadResponse(
+            text="[Document image joint]",
+            filename=filename,
+            page_count=1,
+            is_image=True,
+        )
+
+    raise HTTPException(status_code=415, detail="Format non supporté. Utilisez un PDF ou une image.")
+
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
@@ -262,41 +312,27 @@ async def chat(
     current_user: User = Depends(get_current_user),
 ):
     if not settings.MISTRAL_API_KEY:
-        raise HTTPException(status_code=503, detail="IA non configurée")
+        raise HTTPException(status_code=503, detail="Service IA non configuré")
 
-    client = Mistral(api_key=settings.MISTRAL_API_KEY)
-
-    messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
-    ]
-
+    system = _SYSTEM_PROMPT
     if body.document_context:
-        messages.append({
-            "role": "user",
-            "content": f"DOCUMENT:\n{body.document_context[:8000]}"
-        })
-
-    messages += [
-        {"role": m.role, "content": m.content}
-        for m in body.messages
-    ]
+        system += f"\n\nL'élève t'a partagé le contenu d'un document. Utilise-le pour répondre à ses questions :\n\n---\n{body.document_context[:8000]}\n---"
 
     try:
+        client = MistralClient(api_key=settings.MISTRAL_API_KEY)
         response = await asyncio.to_thread(
             client.chat.complete,
             model="mistral-large-latest",
-            messages=messages,
+            messages=[
+                {"role": "system", "content": system},
+                *[{"role": m.role, "content": m.content} for m in body.messages],
+            ],
         )
-
-        reply = response.choices[0].message.content if response.choices else "Erreur IA"
-
+        reply = response.choices[0].message.content if response.choices else "Erreur de génération de réponse."
         return ChatResponse(reply=reply)
-
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Erreur IA: {str(e)}")
 
-
-# ───────────────────────── CHAT STREAM ───────────────────────── #
 
 @router.post("/chat/stream")
 async def chat_stream(
@@ -304,48 +340,37 @@ async def chat_stream(
     current_user: User = Depends(get_current_user),
 ):
     if not settings.MISTRAL_API_KEY:
-        raise HTTPException(status_code=503, detail="IA non configurée")
+        raise HTTPException(status_code=503, detail="Service IA non configuré")
 
-    def generate():
+    system = _SYSTEM_PROMPT
+    if body.document_context:
+        system += f"\n\nDocument de l'élève :\n\n---\n{body.document_context[:8000]}\n---"
+
+    msgs = [
+        {"role": "system", "content": system},
+        *[{"role": m.role, "content": m.content} for m in body.messages],
+    ]
+
+    def _generate():
         try:
             client = Mistral(api_key=settings.MISTRAL_API_KEY)
-
-            messages = [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-            ]
-
-            if body.document_context:
-                messages.append({
-                    "role": "user",
-                    "content": f"DOCUMENT:\n{body.document_context[:8000]}"
-                })
-
-            messages += [
-                {"role": m.role, "content": m.content}
-                for m in body.messages
-            ]
-
-            stream = client.chat.stream(
-                model="mistral-large-latest",
-                messages=messages,
-            )
-
-            for event in stream:
-                if not event.choices:
+            for event in client.chat.stream(model="mistral-large-latest", messages=msgs):
+                if not event.data.choices:
                     continue
-
-                delta = event.choices[0].delta.content
-
-                if delta:
-                    yield f"data: {json.dumps({'delta': delta})}\n\n"
-
-        except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
+                raw = event.data.choices[0].delta.content
+                if not raw:
+                    continue
+                text = raw if isinstance(raw, str) else "".join(
+                    c.text for c in raw if hasattr(c, "text") and c.text
+                )
+                if text:
+                    yield f"data: {json.dumps({'delta': text})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
-        generate(),
+        _generate(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache"}
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
