@@ -143,6 +143,8 @@ BADGES = [
      "color": "#607D8B", "condition_type": "subjects_explored", "condition_value": 5, "points_reward": 80},
     {"name": "Champion BF", "description": "Atteindre le Top 10 du classement", "icon": "🇧🇫",
      "color": "#EF2B2D", "condition_type": "rank", "condition_value": 10, "points_reward": 500},
+    {"name": "Professeur Vérifié", "description": "Enseignant certifié sur Nafa Edu", "icon": "🏫",
+     "color": "#7C3AED", "condition_type": "teacher", "condition_value": 1, "points_reward": 200},
 ]
 
 FORUM_CATEGORIES = [

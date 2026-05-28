@@ -11,7 +11,9 @@ from app.models.user import TeacherProfile
 from app.models.forum import Discussion
 from app.models.quiz import QuizSession
 from app.models.document import Favorite, Download
+from app.models.badge import Badge, UserBadge
 from app.utils.auth import get_current_admin
+from app.utils.notify import push_notif
 from app.schemas.admin import (
     AdminStats, UserListItem, UserDetailAdmin, UserActivity,
     UserStatusUpdate, ReportOut, ReportResolveRequest,
@@ -230,6 +232,38 @@ async def review_teacher_request(
                 annees_experience=req.annees_experience,
                 is_verified=True,
             ))
+
+        # Award teacher badge
+        badge_res = await db.execute(select(Badge).where(Badge.condition_type == "teacher"))
+        teacher_badge = badge_res.scalar_one_or_none()
+        if teacher_badge:
+            already_earned = await db.execute(
+                select(UserBadge).where(
+                    UserBadge.user_id == req.user_id,
+                    UserBadge.badge_id == teacher_badge.id,
+                )
+            )
+            if not already_earned.scalar_one_or_none():
+                db.add(UserBadge(user_id=req.user_id, badge_id=teacher_badge.id))
+                req.user.points = (req.user.points or 0) + teacher_badge.points_reward
+
+        await push_notif(
+            db,
+            user_id=req.user_id,
+            type="teacher_approved",
+            title="Candidature approuvée 🎉",
+            body="Félicitations ! Vous êtes maintenant enseignant vérifié sur Nafa Edu. Vous pouvez créer et vendre vos cours.",
+            data={"screen": "teacher_dashboard"},
+        )
+    elif data.status == "rejected":
+        await push_notif(
+            db,
+            user_id=req.user_id,
+            type="teacher_rejected",
+            title="Candidature non retenue",
+            body=f"Votre demande enseignant n'a pas été retenue.{(' Motif : ' + data.admin_note) if data.admin_note else ' Vous pouvez soumettre une nouvelle demande.'}",
+            data={"screen": "teacher_request"},
+        )
 
     await db.commit()
     return {"status": req.status, "message": f"Demande {req.status}"}

@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/models/marketplace_model.dart';
+import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/providers/marketplace_provider.dart';
+import 'package:nafa_edu/screens/marketplace/teacher_dashboard_screen.dart';
 
 class TeacherRequestScreen extends ConsumerStatefulWidget {
   const TeacherRequestScreen({super.key});
@@ -53,6 +55,10 @@ class _TeacherRequestScreenState extends ConsumerState<TeacherRequestScreen> {
         _experience = req.anneesExperience;
         _uploadedDocUrl = req.documentUrl;
       });
+      if (req.isApproved) {
+        // Ensure auth state reflects is_teacher = true after approval
+        await ref.read(authProvider.notifier).refreshUser();
+      }
     }
   }
 
@@ -346,33 +352,92 @@ class _TeacherRequestScreenState extends ConsumerState<TeacherRequestScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                isPending ? Icons.hourglass_top : Icons.verified,
-                size: 72,
-                color: isPending ? AppColors.warning : AppColors.success,
-              ),
+              if (!isPending) ...[
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.35),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Text('🏫', style: TextStyle(fontSize: 40)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.3)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.verified, size: 16, color: Color(0xFF7C3AED)),
+                      SizedBox(width: 6),
+                      Text(
+                        'Badge Professeur Vérifié obtenu',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF7C3AED),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else
+                const Icon(Icons.hourglass_top, size: 72, color: AppColors.warning),
               const SizedBox(height: 20),
               Text(
-                isPending
-                    ? 'Candidature en cours d\'examen'
-                    : 'Candidature approuvée !',
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w700),
+                isPending ? 'Candidature en cours d\'examen' : 'Candidature approuvée !',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
               Text(
                 isPending
                     ? 'Notre équipe examine votre demande. Vous serez notifié dès qu\'une décision est prise.'
-                    : 'Félicitations ! Vous êtes maintenant enseignant sur Nafa Edu.',
+                    : 'Félicitations ! Vous êtes maintenant enseignant vérifié sur Nafa Edu. Vous pouvez créer et vendre vos cours.',
                 style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                    height: 1.5),
+                    fontSize: 14, color: AppColors.textSecondary, height: 1.5),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
-              ElevatedButton(
+              if (!isPending) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.dashboard_rounded),
+                    label: const Text('Accéder à mon tableau de bord'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7C3AED),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                    onPressed: () => Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const TeacherDashboardScreen()),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Retour'),
               ),
