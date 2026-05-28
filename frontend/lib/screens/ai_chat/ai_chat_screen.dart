@@ -458,6 +458,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
