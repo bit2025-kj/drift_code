@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models import (
     EducationLevel, Classe, Matiere, TypeExamen,
-    Badge, ForumCategory
+    Badge, ForumCategory, User
 )
 
 LEVELS = [
@@ -210,4 +210,31 @@ async def seed_database(db: AsyncSession):
             db.add(ForumCategory(**cat_data))
 
     await db.commit()
+
+    # ── Admin par défaut ──────────────────────────────────────────────────────
+    await _seed_admin(db)
+
     print("Seed Burkina Faso termine (donnees existantes conservees)")
+
+
+async def _seed_admin(db: AsyncSession):
+    from app.config import settings
+    from app.utils.auth import hash_password
+    import uuid
+
+    res = await db.execute(select(User).where(User.email == settings.ADMIN_EMAIL))
+    if res.scalar_one_or_none():
+        return  # déjà créé
+
+    admin = User(
+        id=str(uuid.uuid4()),
+        email=settings.ADMIN_EMAIL,
+        full_name="Administrateur Nafa Edu",
+        password_hash=hash_password(settings.ADMIN_PASSWORD),
+        is_admin=True,
+        is_active=True,
+        email_verified=True,
+    )
+    db.add(admin)
+    await db.commit()
+    print(f"Admin créé : {settings.ADMIN_EMAIL}")

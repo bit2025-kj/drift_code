@@ -14,6 +14,7 @@ import 'package:nafa_edu/providers/notification_provider.dart';
 import 'package:nafa_edu/providers/user_stats_provider.dart';
 import 'package:nafa_edu/screens/downloads_screen.dart';
 import 'package:nafa_edu/screens/notifications/notification_screen.dart';
+import 'package:nafa_edu/screens/admin/admin_shell.dart';
 import 'package:nafa_edu/screens/profil/settings_screen.dart';
 import 'package:nafa_edu/screens/quiz/quiz_history_screen.dart';
 import 'package:nafa_edu/widgets/network_error_widget.dart';
@@ -103,6 +104,10 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
                 _buildRecentActivity(),
                 const SizedBox(height: 16),
                 _buildBadgesSection(badgesAsync),
+                if (user.isAdmin) ...[
+                  const SizedBox(height: 16),
+                  _buildAdminCard(context),
+                ],
                 const SizedBox(height: 32),
               ],
             ),
@@ -757,6 +762,45 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Admin card ─────────────────────────────────────────────────────────────
+
+  Widget _buildAdminCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminShell())),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF3B5BDB), Color(0xFF748FFC)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.admin_panel_settings_outlined, color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Administration', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text('Gérer les utilisateurs, signalements et demandes prof', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+          ],
+        ),
       ),
     );
   }

@@ -103,7 +103,7 @@ async def generate_context_from_document(
     matiere_name: str = "Général"
 ) -> str:
     """Generate AI response based on document context"""
-    from mistralai.client import Mistral
+    from mistralai import Mistral
     from app.config import settings
     
     if not settings.MISTRAL_API_KEY:

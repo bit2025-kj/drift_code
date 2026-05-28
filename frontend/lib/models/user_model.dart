@@ -8,6 +8,7 @@ class UserModel {
   final int? classeId;
   final String? ville;
   final bool isTeacher;
+  final bool isAdmin;
   final int points;
   final int activeDays;
   final int currentStreak;
@@ -27,6 +28,7 @@ class UserModel {
     this.classeId,
     this.ville,
     required this.isTeacher,
+    this.isAdmin = false,
     required this.points,
     required this.activeDays,
     required this.currentStreak,
@@ -47,6 +49,7 @@ class UserModel {
         classeId: j['classe_id'],
         ville: j['ville'],
         isTeacher: j['is_teacher'] ?? false,
+        isAdmin: j['is_admin'] ?? false,
         points: j['points'] ?? 0,
         activeDays: j['active_days'] ?? 0,
         currentStreak: j['current_streak'] ?? 0,

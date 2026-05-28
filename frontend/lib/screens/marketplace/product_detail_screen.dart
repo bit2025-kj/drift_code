@@ -5,6 +5,7 @@ import 'package:nafa_edu/config/constants.dart';
 import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/models/marketplace_model.dart';
 import 'package:nafa_edu/providers/marketplace_provider.dart';
+import 'package:nafa_edu/widgets/report_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
@@ -126,6 +127,16 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     return SliverAppBar(
       expandedHeight: hasThumbnail ? 220 : 160,
       pinned: true,
+      actions: [
+        PopupMenuButton<String>(
+          onSelected: (v) {
+            if (v == 'report') showReportDialog(context, contentType: 'product', contentId: prod.id);
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'report', child: Row(children: [Icon(Icons.flag_outlined, size: 18, color: AppColors.error), SizedBox(width: 8), Text('Signaler')])),
+          ],
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         background: hasThumbnail
             ? CachedNetworkImage(

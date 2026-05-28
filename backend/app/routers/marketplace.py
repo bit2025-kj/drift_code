@@ -9,13 +9,14 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.models import Product, Purchase, TeacherProfile, User
+from app.models import Product, Purchase, TeacherProfile, User, Report
 from app.models.marketplace import TeacherRequest
 from app.schemas.marketplace import (
     ProductOut, ProductCreate, ProductUpdate, ProductListResponse,
     PurchaseResponse, MarketplaceFilter,
     TeacherRequestCreate, TeacherRequestOut, AdminReviewRequest,
 )
+from app.schemas.admin import ReportCreate
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
@@ -616,3 +617,39 @@ async def purchase_product(
         media_urls=product.media_urls or [],
         message="Achat réussi ! Accédez à votre contenu dès maintenant.",
     )
+
+
+# ── Signalement ───────────────────────────────────────────────────────────────
+
+@router.post("/{product_id}/report", status_code=201)
+async def report_product(
+    product_id: str,
+    data: ReportCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Produit introuvable")
+
+    existing = await db.execute(
+        select(Report).where(
+            Report.reporter_id == current_user.id,
+            Report.content_type == "product",
+            Report.content_id == product_id,
+            Report.status == "pending",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Vous avez déjà signalé ce contenu")
+
+    db.add(Report(
+        id=str(uuid.uuid4()),
+        reporter_id=current_user.id,
+        content_type="product",
+        content_id=product_id,
+        reason=data.reason,
+        description=data.description,
+    ))
+    await db.commit()
+    return {"message": "Signalement envoyé, merci pour votre contribution"}

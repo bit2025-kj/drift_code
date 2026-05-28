@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.utils.auth import get_current_user
 from app.models.user import User
 from app.config import settings
-from mistralai.client import MistralClient
+from mistralai import Mistral
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
@@ -319,7 +319,7 @@ async def chat(
         system += f"\n\nL'élève t'a partagé le contenu d'un document. Utilise-le pour répondre à ses questions :\n\n---\n{body.document_context[:8000]}\n---"
 
     try:
-        client = MistralClient(api_key=settings.MISTRAL_API_KEY)
+        client = Mistral(api_key=settings.MISTRAL_API_KEY)
         response = await asyncio.to_thread(
             client.chat.complete,
             model="mistral-large-latest",

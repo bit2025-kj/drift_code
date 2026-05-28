@@ -7,6 +7,7 @@ from app.models.marketplace import Product, Purchase, TeacherRequest
 from app.models.badge import Badge, UserBadge
 from app.models.chat import ConversationThread, ConversationMessage, ChatDocument
 from app.models.notification import Notification
+from app.models.report import Report
 
 __all__ = [
     "User", "TeacherProfile",
@@ -18,4 +19,5 @@ __all__ = [
     "Badge", "UserBadge",
     "ConversationThread", "ConversationMessage", "ChatDocument",
     "Notification",
+    "Report",
 ]

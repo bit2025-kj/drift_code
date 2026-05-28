@@ -8,6 +8,7 @@ import 'package:nafa_edu/core/api/api_endpoints.dart';
 import 'package:nafa_edu/models/document_model.dart';
 import 'package:nafa_edu/screens/banque/document_reader_screen.dart';
 import 'package:nafa_edu/services/download_manager.dart';
+import 'package:nafa_edu/widgets/report_dialog.dart';
 
 class DocumentDetailScreen extends ConsumerStatefulWidget {
   final DocumentModel document;
@@ -123,6 +124,14 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
                   ),
                   onPressed: _toggleFavorite,
                 ),
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'report') showReportDialog(context, contentType: 'document', contentId: doc.id);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'report', child: Row(children: [Icon(Icons.flag_outlined, size: 18, color: AppColors.error), SizedBox(width: 8), Text('Signaler')])),
+            ],
+          ),
         ],
       ),
       body: ListView(

@@ -4,8 +4,9 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import Document, DocumentLike, Favorite, Download, EducationLevel, Classe, Matiere, TypeExamen, User
+from app.models import Document, DocumentLike, Favorite, Download, EducationLevel, Classe, Matiere, TypeExamen, User, Report
 from app.schemas.document import DocumentOut, DocumentListResponse, FavoriteToggleResponse
+from app.schemas.admin import ReportCreate
 from app.utils.auth import get_current_user
 from app.utils.notify import push_notif
 from app.config import settings
@@ -325,3 +326,39 @@ async def upload_document(
         .where(Document.id == doc.id)
     )
     return _enrich(result.scalar_one())
+
+
+# ── Signalement ───────────────────────────────────────────────────────────────
+
+@router.post("/{document_id}/report", status_code=201)
+async def report_document(
+    document_id: str,
+    data: ReportCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = (await db.execute(select(Document).where(Document.id == document_id))).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+
+    existing = await db.execute(
+        select(Report).where(
+            Report.reporter_id == current_user.id,
+            Report.content_type == "document",
+            Report.content_id == document_id,
+            Report.status == "pending",
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Vous avez déjà signalé ce contenu")
+
+    db.add(Report(
+        id=str(uuid.uuid4()),
+        reporter_id=current_user.id,
+        content_type="document",
+        content_id=document_id,
+        reason=data.reason,
+        description=data.description,
+    ))
+    await db.commit()
+    return {"message": "Signalement envoyé, merci pour votre contribution"}

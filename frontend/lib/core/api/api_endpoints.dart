@@ -99,4 +99,20 @@ class ApiEndpoints {
   static const syncBatch = '/sync/batch';
   static const syncFavorites = '/sync/favorites';
   static const syncDownloads = '/sync/downloads';
+
+  // ── Admin ────────────────────────────────────────────────────────────────────
+  static const adminStats = '/admin/stats';
+  static const adminUsers = '/admin/users';
+  static String adminUser(String id) => '/admin/users/$id';
+  static String adminUserStatus(String id) => '/admin/users/$id/status';
+  static const adminTeacherRequestsV2 = '/admin/teacher-requests';
+  static String adminReviewTeacherRequest(String id) => '/admin/teacher-requests/$id';
+  static const adminReports = '/admin/reports';
+  static String adminReport(String id) => '/admin/reports/$id';
+  static String adminDeleteDocument(String id) => '/admin/documents/$id';
+  static String adminDeleteProduct(String id) => '/admin/products/$id';
+
+  // ── Signalement ───────────────────────────────────────────────────────────────
+  static String reportDocument(String id) => '/documents/$id/report';
+  static String reportProduct(String id) => '/marketplace/$id/report';
 }

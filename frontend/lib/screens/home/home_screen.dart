@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nafa_edu/config/theme.dart';
-import 'package:nafa_edu/core/api/api_client.dart';
 import 'package:nafa_edu/models/document_model.dart';
 import 'package:nafa_edu/providers/document_provider.dart';
 import 'package:nafa_edu/providers/auth_provider.dart';
