@@ -1,6 +1,10 @@
+import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:nafa_edu/config/constants.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 
 const kActionGray = Color(0xFF606770);
@@ -71,55 +75,152 @@ class ForumMediaGrid extends StatelessWidget {
   const ForumMediaGrid({super.key, required this.mediaUrls});
 
   bool _isVideo(String url) {
-    final lower = url.toLowerCase();
-    return lower.contains('.mp4') ||
-        lower.contains('.mov') ||
-        lower.contains('.avi') ||
-        lower.contains('.mkv') ||
+    final lower = url.toLowerCase().split('?').first;
+    return lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.avi') ||
+        lower.endsWith('.mkv') ||
         lower.contains('video');
   }
+
+  bool _isPdf(String url) => url.toLowerCase().split('?').first.endsWith('.pdf');
 
   String _fullUrl(String url) {
     if (url.startsWith('http')) return url;
     return '${AppConstants.baseUrl}$url';
   }
 
-  Widget _mediaItem(String url, {double? height, BorderRadius? radius}) {
-    final isVideo = _isVideo(url);
+  void _openImageFullscreen(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog.fullscreen(
+        child: Stack(
+          children: [
+            Container(
+              color: Colors.black,
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 6.0,
+                child: Center(
+                  child: CachedNetworkImage(
+                    imageUrl: _fullUrl(url),
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const CircularProgressIndicator(
+                        color: Colors.white38, strokeWidth: 2),
+                    errorWidget: (_, __, ___) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white38,
+                        size: 64),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              left: 8,
+              child: SafeArea(
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.pop(context),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black54,
+                    shape: const CircleBorder(),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openVideo(String url) async {
+    final uri = Uri.parse(_fullUrl(url));
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  void _openPdf(BuildContext context, String url) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ForumPdfScreen(url: _fullUrl(url)),
+      ),
+    );
+  }
+
+  Widget _mediaItem(BuildContext context, String url,
+      {double? height, BorderRadius? radius}) {
     final br = radius ?? BorderRadius.zero;
-    if (isVideo) {
-      return ClipRRect(
-        borderRadius: br,
-        child: Container(
-          height: height,
-          color: Colors.black,
-          child: const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.play_circle_outline, color: Colors.white, size: 48),
-                SizedBox(height: 4),
-                Text('Vidéo',
-                    style: TextStyle(color: Colors.white, fontSize: 12)),
-              ],
+
+    if (_isVideo(url)) {
+      return GestureDetector(
+        onTap: () => _openVideo(url),
+        child: ClipRRect(
+          borderRadius: br,
+          child: Container(
+            height: height,
+            color: Colors.black,
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.play_circle_outline, color: Colors.white, size: 48),
+                  SizedBox(height: 4),
+                  Text('Appuyer pour lire',
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
             ),
           ),
         ),
       );
     }
-    return ClipRRect(
-      borderRadius: br,
-      child: CachedNetworkImage(
-        imageUrl: _fullUrl(url),
-        height: height,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        placeholder: (_, __) =>
-            Container(height: height, color: const Color(0xFFE4E6EB)),
-        errorWidget: (_, __, ___) => Container(
+
+    if (_isPdf(url)) {
+      return GestureDetector(
+        onTap: () => _openPdf(context, url),
+        child: ClipRRect(
+          borderRadius: br,
+          child: Container(
+            height: height,
+            color: const Color(0xFFF3F0FF),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.picture_as_pdf_outlined,
+                      color: Color(0xFF7C3AED), size: 48),
+                  SizedBox(height: 4),
+                  Text('Appuyer pour ouvrir le PDF',
+                      style: TextStyle(color: Color(0xFF7C3AED), fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Image
+    return GestureDetector(
+      onTap: () => _openImageFullscreen(context, url),
+      child: ClipRRect(
+        borderRadius: br,
+        child: CachedNetworkImage(
+          imageUrl: _fullUrl(url),
           height: height,
-          color: const Color(0xFFE4E6EB),
-          child: const Icon(Icons.broken_image_outlined, color: kActionGray),
+          width: double.infinity,
+          fit: BoxFit.cover,
+          placeholder: (_, __) =>
+              Container(height: height, color: const Color(0xFFE4E6EB)),
+          errorWidget: (_, __, ___) => Container(
+            height: height,
+            color: const Color(0xFFE4E6EB),
+            child: const Icon(Icons.broken_image_outlined, color: kActionGray),
+          ),
         ),
       ),
     );
@@ -132,7 +233,7 @@ class ForumMediaGrid extends StatelessWidget {
     if (count == 1) {
       return AspectRatio(
         aspectRatio: 16 / 9,
-        child: _mediaItem(mediaUrls[0]),
+        child: _mediaItem(context, mediaUrls[0]),
       );
     }
 
@@ -141,9 +242,9 @@ class ForumMediaGrid extends StatelessWidget {
         height: 200,
         child: Row(
           children: [
-            Expanded(child: _mediaItem(mediaUrls[0], height: 200)),
+            Expanded(child: _mediaItem(context, mediaUrls[0], height: 200)),
             const SizedBox(width: 2),
-            Expanded(child: _mediaItem(mediaUrls[1], height: 200)),
+            Expanded(child: _mediaItem(context, mediaUrls[1], height: 200)),
           ],
         ),
       );
@@ -156,15 +257,15 @@ class ForumMediaGrid extends StatelessWidget {
           children: [
             Expanded(
               flex: 2,
-              child: _mediaItem(mediaUrls[0], height: 200),
+              child: _mediaItem(context, mediaUrls[0], height: 200),
             ),
             const SizedBox(width: 2),
             Expanded(
               child: Column(
                 children: [
-                  Expanded(child: _mediaItem(mediaUrls[1])),
+                  Expanded(child: _mediaItem(context, mediaUrls[1])),
                   const SizedBox(height: 2),
-                  Expanded(child: _mediaItem(mediaUrls[2])),
+                  Expanded(child: _mediaItem(context, mediaUrls[2])),
                 ],
               ),
             ),
@@ -183,9 +284,13 @@ class ForumMediaGrid extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _mediaItem(show[0], height: double.infinity)),
+                Expanded(
+                    child: _mediaItem(context, show[0],
+                        height: double.infinity)),
                 const SizedBox(width: 2),
-                Expanded(child: _mediaItem(show[1], height: double.infinity)),
+                Expanded(
+                    child: _mediaItem(context, show[1],
+                        height: double.infinity)),
               ],
             ),
           ),
@@ -193,13 +298,15 @@ class ForumMediaGrid extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _mediaItem(show[2], height: double.infinity)),
+                Expanded(
+                    child: _mediaItem(context, show[2],
+                        height: double.infinity)),
                 const SizedBox(width: 2),
                 Expanded(
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      _mediaItem(show[3], height: double.infinity),
+                      _mediaItem(context, show[3], height: double.infinity),
                       if (extra > 0)
                         Container(
                           color: Colors.black.withValues(alpha: 0.5),
@@ -222,6 +329,112 @@ class ForumMediaGrid extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Forum PDF viewer screen ───────────────────────────────────────────────────
+
+class _ForumPdfScreen extends StatefulWidget {
+  final String url;
+  const _ForumPdfScreen({required this.url});
+
+  @override
+  State<_ForumPdfScreen> createState() => _ForumPdfScreenState();
+}
+
+class _ForumPdfScreenState extends State<_ForumPdfScreen> {
+  Uint8List? _bytes;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final response = await Dio().get<List<int>>(
+        widget.url,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      if (mounted) {
+        setState(() {
+          _bytes = Uint8List.fromList(response.data!);
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Document', style: TextStyle(fontSize: 15)),
+        actions: [
+          if (!_loading && _error == null)
+            IconButton(
+              icon: const Icon(Icons.open_in_new_rounded),
+              tooltip: 'Ouvrir dans le navigateur',
+              onPressed: () async {
+                final uri = Uri.parse(widget.url);
+                try {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                } catch (_) {}
+              },
+            ),
+        ],
+      ),
+      body: _loading
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Colors.white54),
+                  SizedBox(height: 14),
+                  Text('Chargement…',
+                      style: TextStyle(color: Colors.white54, fontSize: 13)),
+                ],
+              ),
+            )
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off_rounded,
+                            color: Colors.white38, size: 48),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Impossible de charger le document',
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w700),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            setState(() { _loading = true; _error = null; });
+                            _load();
+                          },
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Réessayer'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : SfPdfViewer.memory(_bytes!),
     );
   }
 }

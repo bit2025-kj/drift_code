@@ -109,8 +109,11 @@ class _DocumentReaderScreenState extends ConsumerState<DocumentReaderScreen> {
         if (doc.fileUrl == null || doc.fileUrl!.isEmpty) {
           throw Exception('URL du document introuvable');
         }
+        final fileUrl = doc.fileUrl!.startsWith('http')
+            ? doc.fileUrl!
+            : '${AppConstants.baseUrl}${doc.fileUrl}';
         final response = await ApiClient.instance.dio.get<List<int>>(
-          '${AppConstants.baseUrl}${doc.fileUrl}',
+          fileUrl,
           options: Options(responseType: ResponseType.bytes),
           onReceiveProgress: (received, total) {
             if (total > 0 && mounted) {
@@ -448,7 +451,9 @@ class _DocumentReaderScreenState extends ConsumerState<DocumentReaderScreen> {
           errorBuilder: (_, __, ___) => _buildImageError());
     } else {
       image = CachedNetworkImage(
-        imageUrl: '${AppConstants.baseUrl}${doc.fileUrl}',
+        imageUrl: doc.fileUrl!.startsWith('http')
+            ? doc.fileUrl!
+            : '${AppConstants.baseUrl}${doc.fileUrl}',
         fit: BoxFit.contain,
         placeholder: (_, __) => const Center(
           child: CircularProgressIndicator(

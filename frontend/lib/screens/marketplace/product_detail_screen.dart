@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nafa_edu/config/constants.dart';
@@ -6,6 +8,7 @@ import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/models/marketplace_model.dart';
 import 'package:nafa_edu/providers/marketplace_provider.dart';
 import 'package:nafa_edu/widgets/report_dialog.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
@@ -29,10 +32,19 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       url.startsWith('http') ? url : '${AppConstants.baseUrl}$url';
 
   Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(_fullUrl(url));
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final full = _fullUrl(url);
+    // PDFs → in-app viewer
+    if (full.toLowerCase().split('?').first.endsWith('.pdf')) {
+      if (mounted) {
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => _PdfViewerScreen(url: full)));
+      }
+      return;
     }
+    // Videos / images → external app (no canLaunchUrl needed)
+    try {
+      await launchUrl(Uri.parse(full), mode: LaunchMode.externalApplication);
+    } catch (_) {}
   }
 
   Future<void> _purchase() async {
@@ -404,7 +416,51 @@ class _MediaGallery extends StatelessWidget {
   String _fullUrl(String url) =>
       url.startsWith('http') ? url : '${AppConstants.baseUrl}$url';
 
-  Widget _mediaWidget(ProductMedia m) {
+  void _showImageFullscreen(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog.fullscreen(
+        child: Stack(children: [
+          Container(
+            color: Colors.black,
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 6.0,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const CircularProgressIndicator(
+                      color: Colors.white38, strokeWidth: 2),
+                  errorWidget: (_, __, ___) => const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white38,
+                      size: 64),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 40,
+            left: 8,
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded,
+                    color: Colors.white, size: 28),
+                onPressed: () => Navigator.pop(context),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                  shape: const CircleBorder(),
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _mediaWidget(BuildContext context, ProductMedia m) {
     if (m.isVideo) {
       return GestureDetector(
         onTap: () => onOpen(m.url),
@@ -451,16 +507,15 @@ class _MediaGallery extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               const Text('Appuyez pour ouvrir',
-                  style: TextStyle(
-                      color: Color(0xFF7C3AED), fontSize: 11)),
+                  style: TextStyle(color: Color(0xFF7C3AED), fontSize: 11)),
             ],
           ),
         ),
       );
     }
-    // Image
+    // Image — fullscreen in-app viewer
     return GestureDetector(
-      onTap: () => onOpen(m.url),
+      onTap: () => _showImageFullscreen(context, _fullUrl(m.url)),
       child: CachedNetworkImage(
         imageUrl: _fullUrl(m.url),
         fit: BoxFit.cover,
@@ -481,7 +536,7 @@ class _MediaGallery extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: AspectRatio(
           aspectRatio: 16 / 9,
-          child: _mediaWidget(mediaUrls[0]),
+          child: _mediaWidget(context, mediaUrls[0]),
         ),
       );
     }
@@ -496,7 +551,7 @@ class _MediaGallery extends StatelessWidget {
               controller: pageCtrl,
               onPageChanged: onPageChanged,
               itemCount: mediaUrls.length,
-              itemBuilder: (_, i) => _mediaWidget(mediaUrls[i]),
+              itemBuilder: (ctx, i) => _mediaWidget(ctx, mediaUrls[i]),
             ),
           ),
         ),
@@ -700,6 +755,114 @@ class _DetailRow extends StatelessWidget {
                   fontSize: 13, fontWeight: FontWeight.w600)),
         ],
       ),
+    );
+  }
+}
+
+// ── In-app PDF viewer ─────────────────────────────────────────────────────────
+
+class _PdfViewerScreen extends StatefulWidget {
+  final String url;
+  const _PdfViewerScreen({required this.url});
+
+  @override
+  State<_PdfViewerScreen> createState() => _PdfViewerScreenState();
+}
+
+class _PdfViewerScreenState extends State<_PdfViewerScreen> {
+  Uint8List? _bytes;
+  bool _loading = true;
+  String? _error;
+  double _progress = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; _progress = 0; });
+    try {
+      final response = await Dio().get<List<int>>(
+        widget.url,
+        options: Options(responseType: ResponseType.bytes),
+        onReceiveProgress: (received, total) {
+          if (total > 0 && mounted) {
+            setState(() => _progress = received / total);
+          }
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _bytes = Uint8List.fromList(response.data!);
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Document', style: TextStyle(fontSize: 15)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.open_in_new_rounded),
+            tooltip: 'Ouvrir dans le navigateur',
+            onPressed: () async {
+              try {
+                await launchUrl(Uri.parse(widget.url),
+                    mode: LaunchMode.externalApplication);
+              } catch (_) {}
+            },
+          ),
+        ],
+      ),
+      body: _loading
+          ? Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const CircularProgressIndicator(
+                    color: Colors.white54, strokeWidth: 2),
+                const SizedBox(height: 14),
+                Text(
+                  _progress > 0
+                      ? 'Chargement ${(_progress * 100).toInt()}%…'
+                      : 'Chargement…',
+                  style: const TextStyle(color: Colors.white54, fontSize: 13),
+                ),
+              ]),
+            )
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.cloud_off_rounded,
+                          color: Colors.white38, size: 48),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Impossible de charger le document',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w700),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: _load,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Réessayer'),
+                      ),
+                    ]),
+                  ),
+                )
+              : SfPdfViewer.memory(_bytes!),
     );
   }
 }
