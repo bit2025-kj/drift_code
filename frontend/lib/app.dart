@@ -4,6 +4,7 @@ import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/screens/auth/login_screen.dart';
 import 'package:nafa_edu/screens/main_shell.dart';
+import 'package:nafa_edu/screens/admin/admin_shell.dart';
 
 class NafaEduApp extends ConsumerWidget {
   const NafaEduApp({super.key});
@@ -42,7 +43,7 @@ class _AuthGate extends ConsumerWidget {
           ),
         );
       case AuthStatus.authenticated:
-        return const MainShell();
+        return auth.user?.isAdmin == true ? const AdminShell() : const MainShell();
       case AuthStatus.unauthenticated:
         return const LoginScreen();
     }

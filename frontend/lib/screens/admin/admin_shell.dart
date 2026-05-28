@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/providers/admin_provider.dart';
+import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/screens/admin/admin_dashboard_screen.dart';
 import 'package:nafa_edu/screens/admin/users_list_screen.dart';
 import 'package:nafa_edu/screens/admin/reports_screen.dart';
@@ -40,10 +41,14 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         title: const Text('Administration'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Déconnexion',
+            onPressed: () => ref.read(authProvider.notifier).logout(),
+          ),
+        ],
       ),
       body: _screens[_index],
       bottomNavigationBar: NavigationBar(
