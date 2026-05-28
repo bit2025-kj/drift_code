@@ -57,7 +57,7 @@ class HomeScreen extends ConsumerWidget {
                   loading: () => _buildShimmerRow(155, 185),
                   error: (e, _) => NetworkErrorWidget(error: e, compact: true, onRetry: () => ref.invalidate(trendingDocumentsProvider)),
                 ),
-              ),
+),
               SliverToBoxAdapter(
                 child: _buildSectionHeader(
                   '⏱ Continuer la révision', 'Voir tout ›',
@@ -180,55 +180,93 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // ── Search (button → Banque) ──────────────────────────────────────────────────
 
-  Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => ref.read(tabIndexProvider.notifier).state = 1,
-              child: Container(
-                height: 46,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE9ECEF)),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
+Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+    child: Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 46,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE9ECEF),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 14),
-                    const Icon(Icons.search_rounded, size: 20, color: Color(0xFFADB5BD)),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Rechercher un sujet, une matière...',
-                      style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFFADB5BD)),
-                    ),
-                  ],
+              ],
+            ),
+            child: TextField(
+              onChanged: (value) {
+                // Ici tu peux gérer la recherche
+                print(value);
+
+                // Exemple Riverpod :
+                // ref.read(searchProvider.notifier).state = value;
+              },
+              decoration: InputDecoration(
+                hintText: 'Rechercher un sujet, une matière...',
+                hintStyle: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: const Color(0xFFADB5BD),
                 ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 20,
+                  color: Color(0xFFADB5BD),
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                ),
+              ),
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.black87,
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: () => ref.read(tabIndexProvider.notifier).state = 1,
-            child: Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha:0.3), blurRadius: 8, offset: const Offset(0, 3))],
-              ),
-              child: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+        ),
+
+        const SizedBox(width: 10),
+
+        GestureDetector(
+          onTap: () {
+            ref.read(tabIndexProvider.notifier).state = 1;
+          },
+          child: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.tune_rounded,
+              color: Colors.white,
+              size: 20,
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
+
 
   // ── Categories (Primaire, Collège…) → Banque with level filter ───────────────
 
