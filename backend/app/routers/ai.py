@@ -1,10 +1,15 @@
 import json
 import asyncio
+import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.database import get_db
 from app.utils.auth import get_current_user
 from app.models.user import User
+from app.models.document import Document
 from app.config import settings
 from mistralai import Mistral
 
@@ -258,6 +263,10 @@ class DocumentUploadResponse(BaseModel):
     is_image: bool
 
 
+class AnalyzeDocumentRequest(BaseModel):
+    document_id: str
+
+
 def _extract_pdf_text(content: bytes) -> tuple[str, int]:
     """Extract text from PDF bytes. Returns (text, page_count)."""
     try:
@@ -332,9 +341,17 @@ async def upload_document(
     is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf")
 
     if is_pdf:
-        text, page_count = _extract_pdf_text(content)
+        try:
+            text, page_count = _extract_pdf_text(content)
+        except HTTPException:
+            text, page_count = "", 1
         if not text.strip():
-            text = "[Ce PDF ne contient pas de texte extractible — il est probablement scanné en image.]"
+            from app.services.quiz_service import render_pdf_page_as_image
+            img_bytes = render_pdf_page_as_image(content)
+            if img_bytes:
+                text = await _describe_image_with_ai(img_bytes, "image/jpeg")
+            else:
+                text = "[Ce PDF ne contient pas de texte extractible et n'a pas pu être converti en image.]"
         return DocumentUploadResponse(text=text, filename=filename, page_count=page_count, is_image=False)
 
     if is_image:
@@ -342,6 +359,54 @@ async def upload_document(
         return DocumentUploadResponse(text=text, filename=filename, page_count=1, is_image=True)
 
     raise HTTPException(status_code=415, detail="Format non supporté. Utilisez un PDF ou une image.")
+
+
+@router.post("/analyze-document", response_model=DocumentUploadResponse)
+async def analyze_document(
+    body: AnalyzeDocumentRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Extract text content from a stored document (by document_id) for AI analysis."""
+    result = await db.execute(select(Document).where(Document.id == body.document_id))
+    doc = result.scalar_one_or_none()
+    if not doc or not doc.file_url:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+
+    # file_url = "/uploads/documents/{id}{ext}" → local path
+    filename = os.path.basename(doc.file_url)
+    local_path = os.path.join(settings.UPLOAD_DIR, "documents", filename)
+
+    if not os.path.exists(local_path):
+        raise HTTPException(status_code=404, detail="Fichier introuvable sur le serveur")
+
+    with open(local_path, "rb") as f:
+        content = f.read()
+
+    ext = os.path.splitext(filename)[1].lower()
+    is_image_ext = ext in {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+    if is_image_ext:
+        import mimetypes
+        media_type = mimetypes.guess_type(filename)[0] or "image/jpeg"
+        text = await _describe_image_with_ai(content, media_type)
+        return DocumentUploadResponse(text=text, filename=filename, page_count=1, is_image=True)
+
+    # PDF (or unknown → treat as PDF)
+    try:
+        text, page_count = _extract_pdf_text(content)
+    except HTTPException:
+        text, page_count = "", 1
+
+    if not text.strip():
+        from app.services.quiz_service import render_pdf_page_as_image
+        img_bytes = render_pdf_page_as_image(content)
+        if img_bytes:
+            text = await _describe_image_with_ai(img_bytes, "image/jpeg")
+        else:
+            text = "[Ce PDF ne contient pas de texte extractible et n'a pas pu être converti en image.]"
+
+    return DocumentUploadResponse(text=text, filename=filename, page_count=page_count, is_image=False)
 
 
 @router.post("/chat", response_model=ChatResponse)

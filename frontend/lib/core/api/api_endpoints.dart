@@ -81,6 +81,7 @@ class ApiEndpoints {
   static const aiChat = '/ai/chat';
   static const aiChatStream = '/ai/chat/stream';
   static const aiUploadDocument = '/ai/upload-document';
+  static const aiAnalyzeDocument = '/ai/analyze-document';
   static const conversations = '/ai/conversations';
   static String conversation(String id) => '/ai/conversations/$id';
   static String sendMessage(String threadId) => '/ai/conversations/$threadId/messages';

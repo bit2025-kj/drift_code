@@ -148,34 +148,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
       pageCount: 1,
     );
 
-    if (doc.fileUrl == null || doc.fileUrl!.isEmpty) {
-      _triggerInitialSend(doc);
-      return;
-    }
-
-    _isUploading = true; // set before first build so banner shows spinner
+    _isUploading = true;
 
     try {
-      final res = await ApiClient.instance.dio.get(
-        doc.fileUrl!,
-        options: Options(responseType: ResponseType.bytes),
+      final res = await ApiClient.instance.dio.post(
+        ApiEndpoints.aiAnalyzeDocument,
+        data: {'document_id': doc.id},
       );
       if (!mounted) return;
 
-      final rawData = res.data;
-      final bytes = rawData is Uint8List ? rawData : Uint8List.fromList(rawData as List<int>);
-      final uri = Uri.parse(doc.fileUrl!);
-      final ext = uri.path.contains('.') ? uri.path.split('.').last.toLowerCase() : 'pdf';
-      final mf = MultipartFile.fromBytes(bytes, filename: '${doc.title}.$ext');
-
-      final uploadRes = await ApiClient.instance.dio.post(
-        ApiEndpoints.aiUploadDocument,
-        data: FormData.fromMap({'file': mf}),
-        options: Options(contentType: 'multipart/form-data'),
-      );
-      if (!mounted) return;
-
-      final data = uploadRes.data as Map<String, dynamic>;
+      final data = res.data as Map<String, dynamic>;
       setState(() {
         _attachedDoc = _AttachedDoc(
           filename: data['filename'] as String? ?? doc.title,
@@ -188,10 +170,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _isUploading = false);
-      // _attachedDoc already holds metadata fallback
     }
 
-    _triggerInitialSend(doc);
+    if (mounted) _triggerInitialSend(doc);
   }
 
   void _triggerInitialSend(DocumentModel doc) {
