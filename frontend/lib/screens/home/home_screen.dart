@@ -14,6 +14,8 @@ import 'package:nafa_edu/screens/home/publish_sheet.dart';
 import 'package:nafa_edu/providers/notification_provider.dart';
 import 'package:nafa_edu/screens/ai_chat/ai_chat_screen.dart';
 import 'package:nafa_edu/screens/notifications/notification_screen.dart';
+import 'package:nafa_edu/screens/marketplace/teacher_request_screen.dart';
+import 'package:nafa_edu/screens/downloads_screen.dart';
 import 'package:nafa_edu/widgets/network_error_widget.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -36,8 +38,8 @@ class HomeScreen extends ConsumerWidget {
             slivers: [
               // Top bar first
               SliverToBoxAdapter(child: _buildTopBar(context, user, notifCount)),
-              // Hero fills remaining screen height below topbar
-              SliverToBoxAdapter(child: _buildHeroBanner(context, ref)),
+              // Onboarding carousel (3 auto-scrolling cards)
+              const SliverToBoxAdapter(child: _OnboardingCarousel()),
               // Search + categories below the hero (revealed on scroll)
               SliverToBoxAdapter(child: _buildSearchRow(context, ref)),
               SliverToBoxAdapter(child: _buildCategories(context, ref, levelsAsync)),
@@ -175,193 +177,6 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  // ── Hero banner — full height below top bar ───────────────────────────────────
-
-  Widget _buildHeroBanner(BuildContext context, WidgetRef ref) {
-    final screenH = MediaQuery.of(context).size.height;
-    final safeTop = MediaQuery.of(context).padding.top;
-    // topbar = safeTop + 12 (top pad) + 44 (content) + 12 (bottom pad)
-    final topBarH = safeTop + 68.0;
-    // navbar ≈ 60, some breathing room
-    final heroH = (screenH - topBarH - 60).clamp(340.0, 900.0);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          height: heroH,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1A2560), Color(0xFF2B4ABF), Color(0xFF3D70D6)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: [
-              // Decorative circles
-              Positioned(
-                right: -40, top: -40,
-                child: Container(
-                  width: 220, height: 220,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.06), shape: BoxShape.circle),
-                ),
-              ),
-              Positioned(
-                left: -30, bottom: 80,
-                child: Container(
-                  width: 140, height: 140,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.04), shape: BoxShape.circle),
-                ),
-              ),
-              Positioned(
-                right: 20, bottom: -20,
-                child: Container(
-                  width: 100, height: 100,
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.05), shape: BoxShape.circle),
-                ),
-              ),
-              // Hero student image — fills bottom-right
-              Positioned(
-                right: 0,
-                bottom: 40,
-                child: Image.asset(
-                  'assets/images/hero_student.png',
-                  height: heroH * 0.65,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              // Floating accent icons
-              Positioned(
-                right: 120, top: 44,
-                child: _floatingIcon(Icons.quiz_rounded, const Color(0xFF74C0FC)),
-              ),
-              Positioned(
-                right: 50, top: 60,
-                child: _floatingIcon(Icons.lightbulb_outline_rounded, const Color(0xFFFFD43B)),
-              ),
-              Positioned(
-                right: 88, top: 100,
-                child: _floatingIcon(Icons.star_rounded, const Color(0xFFFFC078)),
-              ),
-              // Text + CTAs
-              Positioned(
-                left: 20, top: 32, right: 155,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'Prépare tes\nexamens avec ',
-                            style: GoogleFonts.inter(
-                              fontSize: 22, fontWeight: FontWeight.w800,
-                              color: Colors.white, height: 1.3,
-                            ),
-                          ),
-                          TextSpan(
-                            text: 'Nafa Edu',
-                            style: GoogleFonts.inter(
-                              fontSize: 22, fontWeight: FontWeight.w800,
-                              color: const Color(0xFFFFC078), height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Des milliers de sujets,\ndes quiz intelligents\net une IA pour réussir.',
-                      style: GoogleFonts.inter(
-                        fontSize: 13, color: Colors.white.withValues(alpha:0.82), height: 1.65,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Primary CTA
-                    GestureDetector(
-                      onTap: () => ref.read(tabIndexProvider.notifier).state = 2,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withValues(alpha:0.18), blurRadius: 14, offset: const Offset(0, 5)),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.play_circle_filled_rounded, color: Color(0xFF1A2560), size: 20),
-                            const SizedBox(width: 7),
-                            Text(
-                              'Commencer le quiz',
-                              style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF1A2560)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Secondary CTA
-                    GestureDetector(
-                      onTap: () => ref.read(tabIndexProvider.notifier).state = 1,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Explorer les sujets',
-                            style: GoogleFonts.inter(
-                              fontSize: 13, fontWeight: FontWeight.w600,
-                              color: Colors.white.withValues(alpha:0.9),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 16),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Dots indicator
-              Positioned(
-                bottom: 18, left: 0, right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(3, (i) => Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: i == 0 ? 20 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: i == 0 ? Colors.white : Colors.white.withValues(alpha:0.35),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  )),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _floatingIcon(IconData icon, Color color) {
-    return Container(
-      width: 34, height: 34,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha:0.2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha:0.4)),
-      ),
-      child: Icon(icon, color: color, size: 18),
     );
   }
 
@@ -923,6 +738,312 @@ class HomeScreen extends ConsumerWidget {
 
   void _showAIChat(BuildContext context) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen()));
+  }
+}
+
+// ── Onboarding Carousel ───────────────────────────────────────────────────────
+
+class _OnboardingCarousel extends ConsumerStatefulWidget {
+  const _OnboardingCarousel();
+
+  @override
+  ConsumerState<_OnboardingCarousel> createState() => _OnboardingCarouselState();
+}
+
+class _OnboardingCarouselState extends ConsumerState<_OnboardingCarousel> {
+  late final PageController _pageCtrl;
+  Timer? _timer;
+  int _page = 0;
+  static const _count = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageCtrl = PageController();
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      final next = (_page + 1) % _count;
+      _pageCtrl.animateToPage(next,
+          duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  void _goToDownloads() =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const DownloadsScreen()));
+
+  Widget _downloadBtn() => GestureDetector(
+        onTap: _goToDownloads,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.5)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.download_rounded, color: Colors.white, size: 14),
+            const SizedBox(width: 5),
+            Text('Télécharger',
+                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+          ]),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final screenH = MediaQuery.of(context).size.height;
+    final safeTop = MediaQuery.of(context).padding.top;
+    final topBarH = safeTop + 68.0;
+    final cardH = ((screenH - topBarH - 60) / 2).clamp(190.0, 265.0);
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: SizedBox(
+            height: cardH,
+            child: PageView(
+              controller: _pageCtrl,
+              onPageChanged: (i) => setState(() => _page = i),
+              children: [_card1(cardH), _card2(cardH), _card3(cardH)],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(_count, (i) {
+            final active = i == _page;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: active ? 20 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: active ? AppColors.primary : const Color(0xFFCED4DA),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  Widget _card1(double cardH) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1A2560), Color(0xFF2B4ABF), Color(0xFF3D70D6)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+          ),
+        ),
+        child: Stack(clipBehavior: Clip.hardEdge, children: [
+          Positioned(right: -30, top: -30,
+            child: Container(width: 170, height: 170,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), shape: BoxShape.circle))),
+          Positioned(left: -20, bottom: 30,
+            child: Container(width: 110, height: 110,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), shape: BoxShape.circle))),
+          Positioned(right: 0, bottom: 0,
+            child: Image.asset('assets/images/hero_student.png',
+                height: cardH * 0.88, fit: BoxFit.contain)),
+          Positioned(left: 20, top: 18, right: 130,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              RichText(text: TextSpan(children: [
+                TextSpan(text: 'Prépare tes examens avec ',
+                  style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white, height: 1.3)),
+                TextSpan(text: 'Nafa Edu',
+                  style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFFFFC078), height: 1.3)),
+              ])),
+              const SizedBox(height: 7),
+              Text('Des milliers de sujets et une IA pour réussir.',
+                style: GoogleFonts.inter(fontSize: 11, color: Colors.white.withValues(alpha: 0.82), height: 1.5)),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => ref.read(tabIndexProvider.notifier).state = 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(10),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))],
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.play_circle_filled_rounded, color: Color(0xFF1A2560), size: 15),
+                    const SizedBox(width: 5),
+                    Text('Commencer le quiz',
+                        style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF1A2560))),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _downloadBtn(),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _card2(double cardH) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF4A1D96), Color(0xFF6D28D9), Color(0xFF7C3AED)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+          ),
+        ),
+        child: Stack(clipBehavior: Clip.hardEdge, children: [
+          Positioned(right: -40, top: -40,
+            child: Container(width: 190, height: 190,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.07), shape: BoxShape.circle))),
+          Positioned(left: -20, bottom: 20,
+            child: Container(width: 110, height: 110,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), shape: BoxShape.circle))),
+          Positioned(right: 16, top: 0, bottom: 0,
+            child: Center(
+              child: Container(
+                width: 88, height: 88,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                ),
+                child: const Icon(Icons.school_rounded, color: Colors.white, size: 46),
+              ),
+            ),
+          ),
+          Positioned(left: 20, top: 18, right: 124,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                child: Text('ESPACE ENSEIGNANT',
+                  style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.5)),
+              ),
+              const SizedBox(height: 8),
+              Text('Deviens enseignant sur Nafa Edu',
+                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white, height: 1.3)),
+              const SizedBox(height: 6),
+              Text('Partage tes cours et aide les élèves du Burkina.',
+                style: GoogleFonts.inter(fontSize: 11, color: Colors.white.withValues(alpha: 0.82), height: 1.5)),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TeacherRequestScreen())),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(10),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))],
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.send_rounded, color: Color(0xFF6D28D9), size: 14),
+                    const SizedBox(width: 5),
+                    Text('Soumettre ma candidature',
+                        style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF6D28D9))),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _downloadBtn(),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _card3(double cardH) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF065F46), Color(0xFF047857), Color(0xFF0D9488)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+          ),
+        ),
+        child: Stack(clipBehavior: Clip.hardEdge, children: [
+          Positioned(right: -40, top: -40,
+            child: Container(width: 200, height: 200,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), shape: BoxShape.circle))),
+          Positioned(left: -20, bottom: 10,
+            child: Container(width: 110, height: 110,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), shape: BoxShape.circle))),
+          Positioned(right: 14, top: 0, bottom: 0,
+            child: Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 82, height: 82,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                  ),
+                  child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 44),
+                ),
+                const SizedBox(height: 8),
+                Row(mainAxisSize: MainAxisSize.min, children: List.generate(3, (i) => Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  width: 6, height: 6,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.4 + i * 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                ))),
+              ]),
+            ),
+          ),
+          Positioned(left: 20, top: 18, right: 120,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                child: Text('INTELLIGENCE ARTIFICIELLE',
+                  style: GoogleFonts.inter(fontSize: 7, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.5)),
+              ),
+              const SizedBox(height: 8),
+              Text('Ton assistant IA pédagogique',
+                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white, height: 1.3)),
+              const SizedBox(height: 6),
+              Text('Pose tes questions et génère des quiz intelligents.',
+                style: GoogleFonts.inter(fontSize: 11, color: Colors.white.withValues(alpha: 0.82), height: 1.5)),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(10),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))],
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.chat_bubble_rounded, color: Color(0xFF047857), size: 14),
+                    const SizedBox(width: 5),
+                    Text("Discuter avec l'IA",
+                        style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: const Color(0xFF047857))),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _downloadBtn(),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 }
 
