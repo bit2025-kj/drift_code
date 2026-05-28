@@ -16,7 +16,7 @@ from app.schemas.chat import (
 )
 from app.utils.auth import get_current_user
 from app.config import settings
-from mistralai import Mistral
+from mistralai.client import MistralClient
 from app.services.chat_service import (
     save_uploaded_file, process_document_file, generate_context_from_document
 )
