@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.utils.auth import get_current_user
 from app.models.user import User
 from app.config import settings
-from mistralai.client import MistralClient
+from mistralai import Mistral
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
@@ -266,7 +266,7 @@ def _extract_pdf_text(content: bytes) -> tuple[str, int]:
         page_count = len(doc)
         texts = []
         for i in range(min(page_count, 15)):
-            page = doc.get_page(i)
+            page = doc[i]
             textpage = page.get_textpage()
             text = textpage.get_text_range()
             if text and text.strip():
@@ -319,15 +319,17 @@ async def chat(
         system += f"\n\nL'élève t'a partagé le contenu d'un document. Utilise-le pour répondre à ses questions :\n\n---\n{body.document_context[:8000]}\n---"
 
     try:
-        client = MistralClient(api_key=settings.MISTRAL_API_KEY)
+        client = Mistral(api_key=settings.MISTRAL_API_KEY)
+
         response = await asyncio.to_thread(
             client.chat.complete,
             model="mistral-large-latest",
             messages=[
                 {"role": "system", "content": system},
-                *[{"role": m.role, "content": m.content} for m in body.messages],
+                [{"role": m.role, "content": m.content} for m in body.messages],
             ],
         )
+        
         reply = response.choices[0].message.content if response.choices else "Erreur de génération de réponse."
         return ChatResponse(reply=reply)
     except Exception as e:
@@ -346,27 +348,39 @@ async def chat_stream(
     if body.document_context:
         system += f"\n\nDocument de l'élève :\n\n---\n{body.document_context[:8000]}\n---"
 
-    msgs = [
+    messages = [
         {"role": "system", "content": system},
-        *[{"role": m.role, "content": m.content} for m in body.messages],
     ]
+    
+    if body.document_context:
+        messages.append({
+            "role": "user",
+            "content": f"Voici le document:\n\n{body.document_context[:8000]}"
+        })
+
+messages += [{"role": m.role, "content": m.content} for m in body.messages]
 
     def _generate():
         try:
             client = Mistral(api_key=settings.MISTRAL_API_KEY)
-            for event in client.chat.stream(model="mistral-large-latest", messages=msgs):
-                if not event.data.choices:
+    
+            stream = client.chat.stream(
+                model="mistral-large-latest",
+                messages=msgs,
+            )
+    
+            for event in stream:
+                if not event.choices:
                     continue
-                raw = event.data.choices[0].delta.content
-                if not raw:
-                    continue
-                text = raw if isinstance(raw, str) else "".join(
-                    c.text for c in raw if hasattr(c, "text") and c.text
-                )
-                if text:
-                    yield f"data: {json.dumps({'delta': text})}\n\n"
+    
+                delta = event.choices[0].delta.content
+    
+                if delta:
+                    yield f"data: {json.dumps({'delta': delta})}\n\n"
+    
         except Exception as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+    
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
