@@ -253,16 +253,18 @@ class _PublishSheetState extends ConsumerState<PublishSheet> {
                         child: const Icon(Icons.upload_file_rounded, color: AppColors.primary, size: 20),
                       ),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Publier un sujet',
-                              style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF1A1D23))),
-                          Text('Partage tes documents avec la communauté',
-                              style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFF868E96))),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Publier un sujet',
+                                style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF1A1D23))),
+                            Text('Partage tes documents avec la communauté',
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(fontSize: 11.5, color: const Color(0xFF868E96))),
+                          ],
+                        ),
                       ),
-                      const Spacer(),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close_rounded, color: Color(0xFF868E96)),

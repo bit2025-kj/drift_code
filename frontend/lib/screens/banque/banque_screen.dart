@@ -687,6 +687,7 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(filter['label'] as String,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(fontSize: 9, color: const Color(0xFF868E96), fontWeight: FontWeight.w500)),
                   Text(filter['value'] as String,
                       style: GoogleFonts.inter(
