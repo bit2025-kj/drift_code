@@ -25,6 +25,7 @@ mistralai==1.9.8
 
 pillow>=10.4.0
 pypdfium2==5.8.0
+cloudinary>=1.40.0
 
 greenlet==3.0.3
 setuptools==75.6.0

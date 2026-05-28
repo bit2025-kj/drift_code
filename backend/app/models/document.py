@@ -23,6 +23,7 @@ class Document(Base):
     # Fichiers
     file_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     corrige_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     file_size_kb: Mapped[int] = mapped_column(Integer, default=0)
 
     # Métadonnées

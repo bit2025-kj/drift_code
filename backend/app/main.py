@@ -47,6 +47,7 @@ async def _apply_schema_migrations() -> None:
         "ALTER TABLE reports ADD COLUMN IF NOT EXISTS resolved_by VARCHAR(36)",
         "ALTER TABLE reports ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP",
         "ALTER TABLE reports ADD COLUMN IF NOT EXISTS admin_note TEXT",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(500)",
         # Reports (create if absent — safe no-op if already there)
         """CREATE TABLE IF NOT EXISTS reports (
             id VARCHAR(36) PRIMARY KEY,

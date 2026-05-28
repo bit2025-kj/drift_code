@@ -9,7 +9,7 @@ from app.models.education import Matiere
 from app.schemas.user import UserProfile, UserStats, UpdateProfileRequest, BadgeOut
 from app.schemas.document import DocumentOut, DocumentListResponse
 from app.utils.auth import get_current_user
-from app.config import settings
+from app.utils.storage import upload_file as storage_upload
 import os
 
 router = APIRouter(prefix="/users", tags=["Utilisateurs"])
@@ -52,19 +52,7 @@ async def upload_avatar(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Image trop volumineuse (max 5 Mo)")
 
-    avatars_dir = os.path.join(settings.UPLOAD_DIR, "avatars")
-    os.makedirs(avatars_dir, exist_ok=True)
-
-    for old_ext in ('.jpg', '.jpeg', '.png', '.webp'):
-        old = os.path.join(avatars_dir, f"{current_user.id}{old_ext}")
-        if os.path.exists(old):
-            os.remove(old)
-
-    dest = os.path.join(avatars_dir, f"{current_user.id}{ext}")
-    with open(dest, "wb") as f:
-        f.write(content)
-
-    current_user.avatar_url = f"/uploads/avatars/{current_user.id}{ext}"
+    current_user.avatar_url = await storage_upload(content, f"avatars/{current_user.id}{ext}", resource_type="image")
     await db.commit()
     await db.refresh(current_user)
     out = UserProfile.model_validate(current_user)

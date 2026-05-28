@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.database import get_db
 from app.models import Discussion, DiscussionComment, ForumCategory, User, DiscussionLike, CommentLike, Report
 from app.schemas.forum import (
@@ -16,6 +15,7 @@ from app.schemas.forum import (
 from app.schemas.admin import ReportCreate
 from app.utils.auth import get_current_user, get_optional_user
 from app.utils.notify import push_notif
+from app.utils.storage import upload_file as storage_upload
 
 router = APIRouter(prefix="/forum", tags=["Forum"])
 
@@ -51,15 +51,9 @@ async def upload_media(
 
     ext = os.path.splitext(file.filename or "file")[1] or ".bin"
     filename = f"{uuid.uuid4()}{ext}"
-    forum_dir = os.path.join(settings.UPLOAD_DIR, "forum")
-    os.makedirs(forum_dir, exist_ok=True)
-    dest = os.path.join(forum_dir, filename)
-
     content = await file.read()
-    with open(dest, "wb") as f:
-        f.write(content)
-
-    return {"url": f"/uploads/forum/{filename}"}
+    url = await storage_upload(content, f"forum/{filename}")
+    return {"url": url}
 
 
 @router.get("/stats", response_model=ForumStats)

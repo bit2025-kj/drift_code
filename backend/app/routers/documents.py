@@ -9,8 +9,9 @@ from app.schemas.document import DocumentOut, DocumentListResponse, FavoriteTogg
 from app.schemas.admin import ReportCreate
 from app.utils.auth import get_current_user
 from app.utils.notify import push_notif
+from app.utils.storage import upload_file as storage_upload
 from app.config import settings
-import asyncio, uuid, os, shutil
+import asyncio, uuid, os
 
 
 _CORRIGE_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
@@ -46,10 +47,13 @@ def _enrich(doc: Document) -> DocumentOut:
     out.matiere_name = doc.matiere.name if doc.matiere else None
     out.type_examen_name = doc.type_examen.name if doc.type_examen else None
     if doc.file_url:
-        ext = os.path.splitext(doc.file_url)[1].lower()
+        ext = os.path.splitext(doc.file_url.split("?")[0])[1].lower()
         out.file_type = 'image' if ext in _IMAGE_EXTS else 'pdf'
-        if out.file_type == 'pdf' and os.path.exists(_thumb_path(doc.id)):
-            out.thumbnail_url = f"/uploads/thumbnails/{doc.id}.jpg"
+        if out.file_type == 'pdf':
+            if doc.thumbnail_url:
+                out.thumbnail_url = doc.thumbnail_url
+            elif os.path.exists(_thumb_path(doc.id)):
+                out.thumbnail_url = f"/uploads/thumbnails/{doc.id}.jpg"
     if doc.corrige_url:
         ext = os.path.splitext(doc.corrige_url)[1].lower()
         out.corrige_url = doc.corrige_url
@@ -261,40 +265,51 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
 ):
     max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
-    upload_dir = os.path.join(settings.UPLOAD_DIR, "documents")
-    os.makedirs(upload_dir, exist_ok=True)
-
     file_id = str(uuid.uuid4())
-    ext = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
-    dest = os.path.join(upload_dir, f"{file_id}{ext}")
-    size = 0
-    with open(dest, "wb") as f:
-        chunk = await file.read(max_bytes + 1)
-        if len(chunk) > max_bytes:
-            os.remove(dest)
-            raise HTTPException(status_code=413, detail=f"Fichier trop volumineux (max {settings.MAX_FILE_SIZE_MB} Mo)")
-        f.write(chunk)
-        size = len(chunk)
+    ext = os.path.splitext(file.filename or "file.pdf")[1].lower() or ".pdf"
 
-    file_url = f"/uploads/documents/{file_id}{ext}"
+    chunk = await file.read(max_bytes + 1)
+    if len(chunk) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"Fichier trop volumineux (max {settings.MAX_FILE_SIZE_MB} Mo)")
+    size = len(chunk)
 
-    # Generate thumbnail for PDFs (fire-and-forget background task)
-    if ext.lower() == '.pdf':
-        thumb_dir = os.path.join(settings.UPLOAD_DIR, "thumbnails")
-        os.makedirs(thumb_dir, exist_ok=True)
-        asyncio.create_task(
-            asyncio.to_thread(_generate_thumbnail_sync, dest, os.path.join(thumb_dir, f"{file_id}.jpg"))
-        )
+    file_url = await storage_upload(chunk, f"documents/{file_id}{ext}")
+
+    # Generate thumbnail for PDFs then upload to cloud
+    thumbnail_url = None
+    if ext == '.pdf':
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(chunk)
+            tmp_path = tmp.name
+        thumb_tmp = tmp_path + "_thumb.jpg"
+
+        def _gen_and_upload():
+            _generate_thumbnail_sync(tmp_path, thumb_tmp)
+            if os.path.exists(thumb_tmp):
+                with open(thumb_tmp, "rb") as tf:
+                    return tf.read()
+            return None
+
+        thumb_bytes = await asyncio.to_thread(_gen_and_upload)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        if thumb_bytes:
+            thumbnail_url = await storage_upload(thumb_bytes, f"thumbnails/{file_id}.jpg", resource_type="image")
+            try:
+                os.unlink(thumb_tmp)
+            except OSError:
+                pass
 
     corrige_url = None
     has_corrige = False
 
     if corrige and corrige.filename:
-        c_ext = os.path.splitext(corrige.filename)[1]
-        c_dest = os.path.join(upload_dir, f"{file_id}_corrige{c_ext}")
-        with open(c_dest, "wb") as f:
-            f.write(await corrige.read(max_bytes + 1))
-        corrige_url = f"/uploads/documents/{file_id}_corrige{c_ext}"
+        c_ext = os.path.splitext(corrige.filename)[1].lower() or ".pdf"
+        c_bytes = await corrige.read(max_bytes + 1)
+        corrige_url = await storage_upload(c_bytes, f"documents/{file_id}_corrige{c_ext}")
         has_corrige = True
 
     doc = Document(
@@ -314,6 +329,7 @@ async def upload_document(
         file_size_kb=size // 1024,
         uploaded_by=current_user.id,
         is_approved=True,
+        thumbnail_url=thumbnail_url,
     )
     db.add(doc)
     await db.commit()

@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.database import get_db
 from app.models import Product, Purchase, TeacherProfile, User, Report
 from app.models.marketplace import TeacherRequest
@@ -18,6 +17,7 @@ from app.schemas.marketplace import (
 )
 from app.schemas.admin import ReportCreate
 from app.utils.auth import get_current_user
+from app.utils.storage import upload_file as storage_upload
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 
@@ -71,15 +71,8 @@ async def upload_media(
 
     ext = os.path.splitext(file.filename or "file")[1] or ".bin"
     filename = f"{uuid.uuid4()}{ext}"
-    dest_dir = os.path.join(settings.UPLOAD_DIR, "marketplace")
-    os.makedirs(dest_dir, exist_ok=True)
-    dest = os.path.join(dest_dir, filename)
-
     content = await file.read()
-    with open(dest, "wb") as f:
-        f.write(content)
-
-    url = f"/uploads/marketplace/{filename}"
+    url = await storage_upload(content, f"marketplace/{filename}")
     return {"url": url, "type": media_type, "name": file.filename or filename}
 
 
@@ -163,15 +156,8 @@ async def upload_teacher_document(
 
     ext = os.path.splitext(file.filename or "file")[1] or ".pdf"
     filename = f"teacher_doc_{uuid.uuid4()}{ext}"
-    dest_dir = os.path.join(settings.UPLOAD_DIR, "teacher_docs")
-    os.makedirs(dest_dir, exist_ok=True)
-    dest = os.path.join(dest_dir, filename)
-
     content = await file.read()
-    with open(dest, "wb") as f:
-        f.write(content)
-
-    req.document_url = f"/uploads/teacher_docs/{filename}"
+    req.document_url = await storage_upload(content, f"teacher_docs/{filename}")
     await db.commit()
     return {"document_url": req.document_url}
 

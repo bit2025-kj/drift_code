@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     MISTRAL_API_KEY: str = ""
+    CLOUDINARY_URL: str = ""
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE_MB: int = 50
 
