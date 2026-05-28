@@ -131,9 +131,10 @@ async def trending_documents(db: AsyncSession = Depends(get_db), limit: int = 10
         .options(
             selectinload(Document.level), selectinload(Document.classe),
             selectinload(Document.matiere), selectinload(Document.type_examen),
+            selectinload(Document.uploader),
         )
         .where(Document.is_approved == True)
-        .order_by(Document.downloads_count.desc())
+        .order_by(Document.likes_count.desc(), Document.downloads_count.desc())
         .limit(limit)
     )
     result = await db.execute(stmt)
