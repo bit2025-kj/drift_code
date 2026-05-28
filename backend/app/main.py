@@ -31,6 +31,13 @@ async def _apply_schema_migrations() -> None:
         "ALTER TABLE teacher_requests ADD COLUMN IF NOT EXISTS admin_note TEXT",
         "ALTER TABLE teacher_requests ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP",
         "ALTER TABLE teacher_requests ADD COLUMN IF NOT EXISTS justification TEXT",
+        # Teacher profiles
+        "ALTER TABLE teacher_profiles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE teacher_profiles ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP",
+        "ALTER TABLE teacher_profiles ADD COLUMN IF NOT EXISTS rating FLOAT DEFAULT 0.0",
+        "ALTER TABLE teacher_profiles ADD COLUMN IF NOT EXISTS total_sales INTEGER DEFAULT 0",
+        # Notifications
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS data JSON",
         # Documents
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS session VARCHAR(50)",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS ratings_count INTEGER DEFAULT 0",
