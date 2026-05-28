@@ -104,13 +104,14 @@ async def generate_context_from_document(
 ) -> str:
     """Generate AI response based on document context"""
     from mistralai import Mistral
+    from mistralai.models.chat_completion import ChatMessage
     from app.config import settings
-    
+
     if not settings.MISTRAL_API_KEY:
         raise Exception("Clé API Mistral non configurée")
-    
+
     client = Mistral(api_key=settings.MISTRAL_API_KEY)
-    
+
     prompt = f"""Tu es un assistant éducatif pour Nafa Edu.
 L'utilisateur te pose une question sur un document fourni.
 
@@ -119,18 +120,26 @@ DOCUMENT:
 {document_text[:8000]}
 ---
 
-QUESTION DE L'UTILISATEUR:
+QUESTION:
 {user_question}
 
-Réponds en fonction du contenu du document. Sois clair, pédagogique et encourage l'apprentissage."""
+Réponds uniquement à partir du document. Sois clair et pédagogique.
+"""
 
     try:
         response = await asyncio.to_thread(
             client.chat.complete,
             model="mistral-large-latest",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                ChatMessage(role="user", content=prompt)
+            ],
         )
-        return response.choices[0].message.content if response.choices else "Erreur de génération."
+
+        if response.choices and len(response.choices) > 0:
+            return response.choices[0].message.content
+
+        return "Erreur: réponse vide du modèle."
+
     except Exception as e:
         print(f"❌ Génération réponse échouée: {e}")
         raise
