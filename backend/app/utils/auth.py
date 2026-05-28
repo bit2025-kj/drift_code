@@ -14,12 +14,13 @@ bearer_scheme_optional = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
+    password = password[:72]
     return pwd_context.hash(password)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
+    plain = plain[:72]
     return pwd_context.verify(plain, hashed)
-
 
 def create_access_token(user_id: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
