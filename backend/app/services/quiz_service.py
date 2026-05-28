@@ -1,7 +1,7 @@
 import json
 import base64
 import io
-import asyncio
+from mistralai import Mistral
 from app.config import settings
 
 FALLBACK_QUESTIONS = {
@@ -89,6 +89,12 @@ FALLBACK_QUESTIONS = {
 
 _JSON_SCHEMA = '[{"content": "Question ?", "options": {"A": "opt A", "B": "opt B", "C": "opt C", "D": "opt D"}, "correct_answer": "A", "explanation": "Explication courte"}]'
 
+_DIFFICULTY_GUIDE = {
+    "facile": "notions fondamentales du programme, vocabulaire de base, définitions et rappels de cours",
+    "moyen": "compréhension approfondie, application directe des formules et méthodes du programme",
+    "difficile": "analyse critique, raisonnement complexe, questions de type examen officiel (BEPC/BAC)",
+}
+
 
 def _parse_ai_response(text: str) -> list[dict]:
     text = text.strip()
@@ -100,6 +106,10 @@ def _parse_ai_response(text: str) -> list[dict]:
     return json.loads(text.strip())
 
 
+def _difficulty_context(difficulty: str) -> str:
+    return _DIFFICULTY_GUIDE.get(difficulty, _DIFFICULTY_GUIDE["moyen"])
+
+
 async def generate_quiz_with_ai(
     matiere_name: str,
     difficulty: str,
@@ -109,27 +119,27 @@ async def generate_quiz_with_ai(
     if not settings.MISTRAL_API_KEY:
         raise Exception("Clé API Mistral non configurée")
 
-    try:
-        from mistralai.client import Mistral
-        client = Mistral(api_key=settings.MISTRAL_API_KEY)
+    client = Mistral(api_key=settings.MISTRAL_API_KEY)
+    level_context = f"pour le {topic}" if topic else "pour le secondaire burkinabè"
+    diff_guide = _difficulty_context(difficulty)
 
-        topic_context = f"sur le thème '{topic}'" if topic else ""
-        prompt = f"""Tu es un professeur expert du système éducatif du Burkina Faso.
-Génère exactement {question_count} questions QCM de niveau {difficulty} en {matiere_name} {topic_context}.
+    prompt = f"""Tu es un professeur expert du système éducatif du Burkina Faso.
+Génère exactement {question_count} questions QCM en {matiere_name} {level_context}.
 
+Niveau de difficulté : {difficulty} — {diff_guide}.
+IMPORTANT : toutes les questions doivent être adaptées à ce niveau précis, sans poser de questions en dessous du niveau de l'élève.
+Utilise des exemples et un contexte africain/burkinabè quand c'est pertinent.
 Chaque question doit avoir 4 options (A, B, C, D) avec une seule bonne réponse.
-Le contexte doit être adapté aux élèves burkinabè.
 
-Réponds UNIQUEMENT avec un JSON valide dans ce format exact:
+Réponds UNIQUEMENT avec un JSON valide dans ce format exact (sans texte avant ni après) :
 {_JSON_SCHEMA}"""
 
-        message = await asyncio.to_thread(
-            client.chat.complete,
+    try:
+        message = await client.chat.complete_async(
             model="mistral-large-latest",
             messages=[{"role": "user", "content": prompt}],
         )
         return _parse_ai_response(message.choices[0].message.content)
-
     except Exception as e:
         print(f"❌ Génération IA échouée: {e}")
         raise
@@ -140,34 +150,36 @@ async def generate_quiz_from_content(
     matiere_name: str,
     difficulty: str,
     question_count: int,
+    topic: str | None = None,
 ) -> list[dict]:
-    """Generate quiz from text content extracted from a PDF or typed course."""
     if not settings.MISTRAL_API_KEY:
         raise Exception("Clé API Mistral non configurée")
 
-    try:
-        from mistralai.client import Mistral
-        client = Mistral(api_key=settings.MISTRAL_API_KEY)
+    client = Mistral(api_key=settings.MISTRAL_API_KEY)
+    level_context = f"pour le {topic}" if topic else ""
+    diff_guide = _difficulty_context(difficulty)
 
-        prompt = f"""Tu es un professeur expert du système éducatif du Burkina Faso.
-Voici le contenu d'un cours :
+    prompt = f"""Tu es un professeur expert du système éducatif du Burkina Faso.
+Voici le contenu d'un document de cours en {matiere_name} {level_context}:
 ---
 {content[:8000]}
 ---
-Génère exactement {question_count} questions QCM de niveau {difficulty} en {matiere_name} basées sur ce contenu.
+Génère exactement {question_count} questions QCM basées UNIQUEMENT sur ce contenu.
+
+Niveau de difficulté : {difficulty} — {diff_guide}.
+IMPORTANT : questions adaptées au niveau du document, pas en dessous du niveau de l'élève.
 Chaque question doit avoir 4 options (A, B, C, D) avec une seule bonne réponse.
 Les questions doivent être directement tirées du contenu fourni.
 
-Réponds UNIQUEMENT avec un JSON valide dans ce format exact:
+Réponds UNIQUEMENT avec un JSON valide dans ce format exact (sans texte avant ni après) :
 {_JSON_SCHEMA}"""
 
-        message = await asyncio.to_thread(
-            client.chat.complete,
+    try:
+        message = await client.chat.complete_async(
             model="mistral-large-latest",
             messages=[{"role": "user", "content": prompt}],
         )
         return _parse_ai_response(message.choices[0].message.content)
-
     except Exception as e:
         print(f"❌ Génération depuis contenu échouée: {e}")
         raise
@@ -179,8 +191,8 @@ async def generate_quiz_from_image(
     matiere_name: str,
     difficulty: str,
     question_count: int,
+    topic: str | None = None,
 ) -> list[dict]:
-    """Generate quiz from an image (photo of notes, scanned course page)."""
     if not settings.MISTRAL_API_KEY:
         raise Exception("Clé API Mistral non configurée")
 
@@ -188,44 +200,44 @@ async def generate_quiz_from_image(
     if media_type not in valid_types:
         media_type = "image/jpeg"
 
+    client = Mistral(api_key=settings.MISTRAL_API_KEY)
+    image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+    level_context = f"pour le {topic}" if topic else ""
+    diff_guide = _difficulty_context(difficulty)
+
     try:
-        from mistralai.client import Mistral
-        client = Mistral(api_key=settings.MISTRAL_API_KEY)
-
-        image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
-
-        message = await asyncio.to_thread(
-            client.chat.complete,
-            model="mistral-large-latest",
+        message = await client.chat.complete_async(
+            model="pixtral-large-latest",
             messages=[{
                 "role": "user",
                 "content": [
                     {
                         "type": "image_url",
-                        "image_url": f"data:{media_type};base64,{image_b64}",
+                        "image_url": {"url": f"data:{media_type};base64,{image_b64}"},
                     },
                     {
                         "type": "text",
                         "text": f"""Tu es un professeur expert du système éducatif du Burkina Faso.
-Analyse ce document de cours et génère exactement {question_count} questions QCM de niveau {difficulty} en {matiere_name}.
+Analyse ce document de cours en {matiere_name} {level_context} et génère exactement {question_count} questions QCM.
+
+Niveau de difficulté : {difficulty} — {diff_guide}.
+IMPORTANT : questions adaptées au niveau visible dans le document, pas en dessous du niveau de l'élève.
 Chaque question doit avoir 4 options (A, B, C, D) avec une seule bonne réponse.
 Base les questions sur le contenu visible dans l'image.
 
-Réponds UNIQUEMENT avec un JSON valide dans ce format exact:
+Réponds UNIQUEMENT avec un JSON valide dans ce format exact (sans texte avant ni après) :
 {_JSON_SCHEMA}""",
                     },
                 ],
             }],
         )
         return _parse_ai_response(message.choices[0].message.content)
-
     except Exception as e:
         print(f"❌ Génération depuis image échouée: {e}")
         raise
 
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extract text from PDF using pypdfium2 (up to 5 pages)."""
     try:
         import pypdfium2 as pdfium
         doc = pdfium.PdfDocument(pdf_bytes)
@@ -244,7 +256,6 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 
 def render_pdf_page_as_image(pdf_bytes: bytes) -> bytes | None:
-    """Render first PDF page as JPEG bytes for vision AI (fallback for scanned PDFs)."""
     try:
         import pypdfium2 as pdfium
         doc = pdfium.PdfDocument(pdf_bytes)

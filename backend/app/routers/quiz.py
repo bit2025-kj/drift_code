@@ -203,26 +203,40 @@ async def generate_quiz_from_file(
     content_type = (file.content_type or "").lower()
     q_count = max(5, min(question_count, 30))
 
+    # Fetch user's level/class to contextualise questions
+    user_result = await db.execute(
+        select(User).options(selectinload(User.level), selectinload(User.classe))
+        .where(User.id == current_user.id)
+    )
+    full_user = user_result.scalar_one()
+    topic = (
+        f"programme de {full_user.classe.name} ({full_user.level.name})"
+        if full_user.classe and full_user.level
+        else (f"niveau {full_user.level.name}" if full_user.level else None)
+    )
+
     if "pdf" in content_type:
         text = extract_text_from_pdf(file_bytes)
         if len(text.strip()) > 100:
             questions_data = await generate_quiz_from_content(
                 content=text, matiere_name=matiere.name,
-                difficulty=difficulty, question_count=q_count,
+                difficulty=difficulty, question_count=q_count, topic=topic,
             )
         else:
             img_bytes = render_pdf_page_as_image(file_bytes)
             if img_bytes:
                 questions_data = await generate_quiz_from_image(
                     image_bytes=img_bytes, media_type="image/jpeg",
-                    matiere_name=matiere.name, difficulty=difficulty, question_count=q_count,
+                    matiere_name=matiere.name, difficulty=difficulty,
+                    question_count=q_count, topic=topic,
                 )
             else:
                 questions_data = _get_fallback_questions(matiere.name, q_count)
     elif content_type.startswith("image/"):
         questions_data = await generate_quiz_from_image(
             image_bytes=file_bytes, media_type=content_type,
-            matiere_name=matiere.name, difficulty=difficulty, question_count=q_count,
+            matiere_name=matiere.name, difficulty=difficulty,
+            question_count=q_count, topic=topic,
         )
     else:
         raise HTTPException(status_code=400, detail="Format non supporté. Utilisez un PDF ou une image.")
