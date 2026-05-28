@@ -28,10 +28,9 @@ void main() async {
     return false;
   };
 
-  // Désactiver le téléchargement de polices à l'exécution pour éviter les
-  // crashs hors ligne. Les polices sont servies depuis le cache appareil ou
-  // la police système est utilisée en fallback.
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // Autoriser le téléchargement des polices Google (Inter) au premier lancement.
+  // Les polices sont mises en cache sur l'appareil — fonctionne hors ligne après.
+  GoogleFonts.config.allowRuntimeFetching = true;
 
   // Initialiser le service de synchronisation et surveillance réseau
   await SyncService.instance.init();
