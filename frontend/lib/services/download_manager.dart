@@ -60,12 +60,13 @@ class DownloadManager {
       final relativeUrl = response.data['file_url'] as String?;
       if (relativeUrl == null) throw Exception('URL de téléchargement invalide');
 
-      final fullUrl = '${AppConstants.baseUrl}$relativeUrl';
+      final fullUrl = relativeUrl.startsWith('http')
+          ? relativeUrl
+          : '${AppConstants.baseUrl}$relativeUrl';
 
       if (kIsWeb) {
         // ── Web : déclencher le téléchargement via le navigateur ───────────────
         final uri = Uri.parse(fullUrl);
-        if (!await canLaunchUrl(uri)) throw Exception('Impossible d\'ouvrir le fichier');
         await launchUrl(uri, mode: LaunchMode.externalApplication);
 
         await _persistToDb(doc, isCorrige, null, null);

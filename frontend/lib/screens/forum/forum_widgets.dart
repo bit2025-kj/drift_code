@@ -1,7 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:nafa_edu/config/constants.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:nafa_edu/screens/shared/pdf_viewer_screen.dart';
+import 'package:nafa_edu/screens/shared/video_player_screen.dart';
 
 
 const kActionGray = Color(0xFF606770);
@@ -132,17 +133,16 @@ class ForumMediaGrid extends StatelessWidget {
     );
   }
 
-  Future<void> _openExternal(BuildContext context, String url) async {
-    final uri = Uri.parse(_fullUrl(url));
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible d\'ouvrir le fichier')),
-        );
-      }
-    }
+  void _openPdf(BuildContext context, String url) {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => PdfViewerScreen(url: _fullUrl(url), title: 'Document'),
+    ));
+  }
+
+  Future<void> _openVideo(BuildContext context, String url) async {
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => VideoPlayerScreen(url: _fullUrl(url)),
+    ));
   }
 
   Widget _mediaItem(BuildContext context, String url,
@@ -151,7 +151,7 @@ class ForumMediaGrid extends StatelessWidget {
 
     if (_isVideo(url)) {
       return GestureDetector(
-        onTap: () => _openExternal(context, url),
+        onTap: () => _openVideo(context, url),
         child: ClipRRect(
           borderRadius: br,
           child: Container(
@@ -175,7 +175,7 @@ class ForumMediaGrid extends StatelessWidget {
 
     if (_isPdf(url)) {
       return GestureDetector(
-        onTap: () => _openExternal(context, url),
+        onTap: () => _openPdf(context, url),
         child: ClipRRect(
           borderRadius: br,
           child: Container(
