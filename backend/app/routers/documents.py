@@ -9,7 +9,10 @@ from app.schemas.document import DocumentOut, DocumentListResponse, FavoriteTogg
 from app.schemas.admin import ReportCreate
 from app.utils.auth import get_current_user
 from app.utils.notify import push_notif
-from app.utils.storage import upload_file as storage_upload
+from app.utils.storage import (
+    local_path_from_url,
+    upload_file as storage_upload,
+)
 from app.config import settings
 import asyncio, uuid, os, io as _io
 
@@ -58,6 +61,7 @@ def _enrich(doc: Document) -> DocumentOut:
         ext = os.path.splitext(doc.corrige_url)[1].lower()
         out.corrige_url = doc.corrige_url
         out.corrige_file_type = 'image' if ext in _CORRIGE_IMAGE_EXTS else 'pdf'
+    out.uploaded_by = doc.uploaded_by
     if doc.uploader:
         out.uploader_name = doc.uploader.full_name
         out.uploader_avatar = doc.uploader.avatar_url
@@ -183,7 +187,7 @@ async def download_document(
     # Local files on Render's ephemeral disk are lost on every restart.
     # Return a clear error early rather than letting the client download a 404.
     if file_url and file_url.startswith('/uploads/'):
-        local_path = os.path.join(settings.UPLOAD_DIR, file_url[len('/uploads/'):].lstrip('/'))
+        local_path = local_path_from_url(file_url)
         if not os.path.exists(local_path):
             raise HTTPException(
                 status_code=404,
@@ -285,7 +289,12 @@ async def upload_document(
         raise HTTPException(status_code=413, detail=f"Fichier trop volumineux (max {settings.MAX_FILE_SIZE_MB} Mo)")
     size = len(chunk)
 
-    file_url = await storage_upload(chunk, f"documents/{file_id}{ext}")
+    file_resource_type = "image" if ext in _IMAGE_EXTS else "raw"
+    file_url = await storage_upload(
+        chunk,
+        f"documents/{file_id}{ext}",
+        resource_type=file_resource_type,
+    )
 
     # Generate thumbnail for PDFs then upload to cloud
     thumbnail_url = None
@@ -321,7 +330,12 @@ async def upload_document(
     if corrige and corrige.filename:
         c_ext = os.path.splitext(corrige.filename)[1].lower() or ".pdf"
         c_bytes = await corrige.read(max_bytes + 1)
-        corrige_url = await storage_upload(c_bytes, f"documents/{file_id}_corrige{c_ext}")
+        corrige_resource_type = "image" if c_ext in _CORRIGE_IMAGE_EXTS else "raw"
+        corrige_url = await storage_upload(
+            c_bytes,
+            f"documents/{file_id}_corrige{c_ext}",
+            resource_type=corrige_resource_type,
+        )
         has_corrige = True
 
     doc = Document(
@@ -355,6 +369,58 @@ async def upload_document(
         .where(Document.id == doc.id)
     )
     return _enrich(result.scalar_one())
+
+
+# ── Modifier / Supprimer un document (propriétaire uniquement) ───────────────
+
+class _DocUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+
+
+@router.patch("/{document_id}", response_model=DocumentOut)
+async def update_document(
+    document_id: str,
+    data: _DocUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Document)
+        .options(selectinload(Document.level), selectinload(Document.classe),
+                 selectinload(Document.matiere), selectinload(Document.type_examen),
+                 selectinload(Document.uploader))
+        .where(Document.id == document_id)
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    if doc.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    if data.title is not None:
+        doc.title = data.title
+    if data.description is not None:
+        doc.description = data.description
+    await db.commit()
+    await db.refresh(doc)
+    return _enrich(doc)
+
+
+@router.delete("/{document_id}", status_code=204)
+async def delete_document_owner(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Document).where(Document.id == document_id))
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    if doc.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    await db.delete(doc)
+    await db.commit()
+    return
 
 
 # ── Upload multi-pages (images → PDF) ────────────────────────────────────────
@@ -401,7 +467,11 @@ async def upload_multi_page_document(
         raise HTTPException(status_code=422, detail=f"Impossible de fusionner les images : {e}")
 
     doc_id = str(uuid.uuid4())
-    file_url = await storage_upload(pdf_bytes, f"documents/{doc_id}.pdf")
+    file_url = await storage_upload(
+        pdf_bytes,
+        f"documents/{doc_id}.pdf",
+        resource_type="raw",
+    )
 
     # Generate thumbnail from merged PDF
     thumbnail_url = None

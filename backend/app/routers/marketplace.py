@@ -17,7 +17,7 @@ from app.schemas.marketplace import (
 )
 from app.schemas.admin import ReportCreate
 from app.utils.auth import get_current_user
-from app.utils.storage import upload_file as storage_upload
+from app.utils.storage import missing_local_urls, upload_file as storage_upload
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 
@@ -28,6 +28,11 @@ _MEDIA_TYPES = {
     "video/x-msvideo": "video", "video/x-matroska": "video",
 }
 
+_CLOUD_STORAGE_HINT = (
+    "Ce fichier n'est plus disponible sur le serveur. "
+    "Configurez CLOUDINARY_URL sur Render puis republiez le contenu."
+)
+
 
 def _enrich_product(p: Product) -> ProductOut:
     out = ProductOut.model_validate(p)
@@ -37,6 +42,7 @@ def _enrich_product(p: Product) -> ProductOut:
     if p.teacher and p.teacher.user:
         out.teacher_name = p.teacher.user.full_name
         out.teacher_verified = p.teacher.is_verified
+        out.teacher_user_id = p.teacher.user_id
     out.teacher_id = p.teacher_id
     discount = p.discount_percent
     out.effective_price = int(p.price * (1 - discount / 100)) if discount > 0 else p.price
@@ -52,6 +58,23 @@ def _teacher_options():
         selectinload(Product.level),
         selectinload(Product.teacher).selectinload(TeacherProfile.user),
     ]
+
+
+def _product_file_urls(product: Product) -> list[str | None]:
+    urls: list[str | None] = []
+    for media in product.media_urls or []:
+        if isinstance(media, dict):
+            urls.append(media.get("url"))
+    for item in product.pack_items or []:
+        if isinstance(item, dict):
+            urls.append(item.get("url"))
+    urls.append(product.thumbnail_url)
+    return urls
+
+
+def _ensure_product_files_available(product: Product) -> None:
+    if missing_local_urls(_product_file_urls(product)):
+        raise HTTPException(status_code=404, detail=_CLOUD_STORAGE_HINT)
 
 
 # ── Media upload ──────────────────────────────────────────────────────────────
@@ -72,7 +95,12 @@ async def upload_media(
     ext = os.path.splitext(file.filename or "file")[1] or ".bin"
     filename = f"{uuid.uuid4()}{ext}"
     content = await file.read()
-    url = await storage_upload(content, f"marketplace/{filename}")
+    resource_type = {"image": "image", "video": "video", "pdf": "raw"}[media_type]
+    url = await storage_upload(
+        content,
+        f"marketplace/{filename}",
+        resource_type=resource_type,
+    )
     return {"url": url, "type": media_type, "name": file.filename or filename}
 
 
@@ -527,6 +555,7 @@ async def get_product(product_id: str, db: AsyncSession = Depends(get_db)):
     product = result.scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="Produit introuvable")
+    _ensure_product_files_available(product)
     product.views_count += 1
     await db.commit()
     return _enrich_product(product)
@@ -568,6 +597,7 @@ async def purchase_product(
     product = result.scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="Produit introuvable")
+    _ensure_product_files_available(product)
 
     existing = await db.execute(
         select(Purchase).where(Purchase.user_id == current_user.id, Purchase.product_id == product_id)

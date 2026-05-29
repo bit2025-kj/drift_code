@@ -500,13 +500,13 @@ class _PublishSheetState extends ConsumerState<PublishSheet> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
         ),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
-          const SizedBox(width: 8),
+        child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Chaque image = une page. Les images seront automatiquement assemblées en un PDF multi-pages. Réorganisez-les dans l\'ordre souhaité.',
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.primary, height: 1.5),
+              '',
+             
             ),
           ),
         ]),

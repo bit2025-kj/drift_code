@@ -35,6 +35,7 @@ class ProductOut(BaseModel):
     level_name: str | None = None
     teacher_name: str | None = None
     teacher_id: str | None = None
+    teacher_user_id: str | None = None
     teacher_verified: bool = False
     effective_price: int = 0
     created_at: datetime

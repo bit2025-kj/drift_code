@@ -69,6 +69,7 @@ class ProductModel {
   final String? levelName;
   final String? teacherName;
   final String? teacherId;
+  final String? teacherUserId;
   final bool teacherVerified;
   final int effectivePrice;
   final DateTime createdAt;
@@ -92,6 +93,7 @@ class ProductModel {
     this.levelName,
     this.teacherName,
     this.teacherId,
+    this.teacherUserId,
     required this.teacherVerified,
     required this.effectivePrice,
     required this.createdAt,
@@ -120,6 +122,7 @@ class ProductModel {
         levelName: j['level_name'],
         teacherName: j['teacher_name'],
         teacherId: j['teacher_id'],
+        teacherUserId: j['teacher_user_id'],
         teacherVerified: j['teacher_verified'] ?? false,
         effectivePrice: j['effective_price'] ?? j['price'] ?? 0,
         createdAt: DateTime.parse(j['created_at']),

@@ -27,6 +27,7 @@ class DocumentOut(BaseModel):
     corrige_url: str | None = None
     corrige_file_type: str | None = None
 
+    uploaded_by: str | None = None
     uploader_name: str | None = None
     uploader_avatar: str | None = None
 

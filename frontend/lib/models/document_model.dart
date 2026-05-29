@@ -20,6 +20,7 @@ class DocumentModel {
   final String? thumbnailUrl;
   final String? corrigeUrl;
   final String? corrigeFileType;
+  final String? uploadedBy;
   final String? uploaderName;
   final String? uploaderAvatar;
   final String? levelName;
@@ -49,6 +50,7 @@ class DocumentModel {
     this.thumbnailUrl,
     this.corrigeUrl,
     this.corrigeFileType,
+    this.uploadedBy,
     this.uploaderName,
     this.uploaderAvatar,
     this.levelName,
@@ -82,6 +84,7 @@ class DocumentModel {
         thumbnailUrl: j['thumbnail_url'],
         corrigeUrl: j['corrige_url'],
         corrigeFileType: j['corrige_file_type'],
+        uploadedBy: j['uploaded_by'],
         uploaderName: j['uploader_name'],
         uploaderAvatar: j['uploader_avatar'],
         levelName: j['level_name'],
@@ -117,6 +120,7 @@ class DocumentModel {
         thumbnailUrl: thumbnailUrl,
         corrigeUrl: corrigeUrl,
         corrigeFileType: corrigeFileType,
+        uploadedBy: uploadedBy,
         uploaderName: uploaderName,
         uploaderAvatar: uploaderAvatar,
         levelName: levelName,

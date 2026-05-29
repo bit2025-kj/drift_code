@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nafa_edu/config/constants.dart';
 import 'package:nafa_edu/config/theme.dart';
+import 'package:nafa_edu/core/api/api_client.dart';
+import 'package:nafa_edu/core/api/api_endpoints.dart';
 import 'package:nafa_edu/models/marketplace_model.dart';
+import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/providers/marketplace_provider.dart';
 import 'package:nafa_edu/screens/shared/pdf_viewer_screen.dart';
 import 'package:nafa_edu/screens/shared/video_player_screen.dart';
@@ -26,6 +29,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   final _pageCtrl = PageController();
 
   ProductModel get prod => widget.product;
+
+  bool _isOwner(String? userId) =>
+      userId != null &&
+      prod.teacherUserId != null &&
+      prod.teacherUserId == userId;
+
+  bool get _canManageProduct => _isOwner(ref.read(authProvider).user?.id);
 
   String _fullUrl(String url) =>
       url.startsWith('http') ? url : '${AppConstants.baseUrl}$url';
@@ -51,6 +61,122 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     try {
       await launchUrl(Uri.parse(full), mode: LaunchMode.externalApplication);
     } catch (_) {}
+  }
+
+  Future<void> _editProduct() async {
+    if (!_canManageProduct) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vous ne pouvez modifier que vos propres produits.'),
+        ),
+      );
+      return;
+    }
+
+    final titleCtrl = TextEditingController(text: prod.title);
+    final descCtrl = TextEditingController(text: prod.description);
+    final priceCtrl = TextEditingController(text: '${prod.price}');
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20, right: 20, top: 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Modifier le produit',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: titleCtrl,
+            decoration: const InputDecoration(labelText: 'Titre'),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: descCtrl,
+            decoration: const InputDecoration(labelText: 'Description'),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: priceCtrl,
+            decoration: const InputDecoration(labelText: 'Prix (FCFA)'),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler'))),
+            const SizedBox(width: 12),
+            Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer'))),
+          ]),
+          const SizedBox(height: 16),
+        ]),
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      titleCtrl.dispose();
+      descCtrl.dispose();
+      priceCtrl.dispose();
+      return;
+    }
+    try {
+      await ApiClient.instance.dio.patch(
+        ApiEndpoints.myProduct(prod.id),
+        data: {
+          'title': titleCtrl.text.trim(),
+          'description': descCtrl.text.trim(),
+          'price': int.tryParse(priceCtrl.text.trim()) ?? prod.price,
+        },
+      );
+      ref.invalidate(marketplaceProvider);
+      ref.invalidate(myProductsProvider);
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la modification')));
+    } finally {
+      titleCtrl.dispose();
+      descCtrl.dispose();
+      priceCtrl.dispose();
+    }
+  }
+
+  Future<void> _deleteProduct() async {
+    if (!_canManageProduct) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vous ne pouvez supprimer que vos propres produits.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer ce produit ?'),
+        content: const Text('Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiClient.instance.dio.delete(ApiEndpoints.myProduct(prod.id));
+      ref.invalidate(marketplaceProvider);
+      ref.invalidate(myProductsProvider);
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la suppression')));
+    }
   }
 
   Future<void> _purchase() async {
@@ -141,6 +267,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     final hasThumbnail =
         prod.thumbnailUrl != null || prod.firstImage != null;
     final thumbUrl = prod.thumbnailUrl ?? prod.firstImage?.url;
+    final isOwner = _isOwner(ref.watch(authProvider).user?.id);
 
     return SliverAppBar(
       expandedHeight: hasThumbnail ? 220 : 160,
@@ -148,10 +275,16 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       actions: [
         PopupMenuButton<String>(
           onSelected: (v) {
+            if (v == 'edit') _editProduct();
+            if (v == 'delete') _deleteProduct();
             if (v == 'report') showReportDialog(context, contentType: 'product', contentId: prod.id);
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'report', child: Row(children: [Icon(Icons.flag_outlined, size: 18, color: AppColors.error), SizedBox(width: 8), Text('Signaler')])),
+          itemBuilder: (_) => [
+            if (isOwner) ...const [
+              PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Modifier')])),
+              PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppColors.error), SizedBox(width: 8), Text('Supprimer', style: TextStyle(color: AppColors.error))])),
+            ] else
+              const PopupMenuItem(value: 'report', child: Row(children: [Icon(Icons.flag_outlined, size: 18, color: AppColors.error), SizedBox(width: 8), Text('Signaler')])),
           ],
         ),
       ],
@@ -321,6 +454,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   Widget _buildBottomBar() {
+    final isOwner = _isOwner(ref.watch(authProvider).user?.id);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       decoration: BoxDecoration(
@@ -358,7 +493,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: ElevatedButton(
+              child: isOwner
+                  ? _buildOwnerBottomActions()
+                  : ElevatedButton(
                 onPressed: _isPurchasing ? null : _purchase,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -378,6 +515,27 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildOwnerBottomActions() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _editProduct,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Modifier'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        IconButton(
+          onPressed: _deleteProduct,
+          icon: const Icon(Icons.delete_outline),
+          color: AppColors.error,
+          tooltip: 'Supprimer',
+        ),
+      ],
     );
   }
 

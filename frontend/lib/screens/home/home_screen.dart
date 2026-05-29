@@ -118,7 +118,7 @@ class HomeScreen extends ConsumerWidget {
       padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 12, 20, 12),
       child: Row(
         children: [
-          SvgPicture.asset('assets/icons/logo_book.svg', width: 44, height: 44),
+          Image.asset('assets/logo.jpeg', width: 44, height: 44),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -408,7 +408,16 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
                           child: Text(badge['label'] as String,
                               style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: badge['color'] as Color)),
                         ),
-                        const Icon(Icons.more_horiz, size: 16, color: Color(0xFFADB5BD)),
+                       GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => DocumentDetailScreen(document: doc)),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 6, top: 1),
+                          child: Icon(Icons.more_vert_rounded, size: 20, color: Color(0xFFADB5BD)),
+                        ),
+                      ),
                       ],
                     ),
                   ),

@@ -132,23 +132,16 @@ class _AiChatScreenState extends State<AiChatScreen> {
   // ── Document from card ────────────────────────────────────────────────────────
 
   Future<void> _initWithDocument(DocumentModel doc) async {
-    // Set metadata as immediate fallback (direct assignment before first build)
+    // Attach the document shell immediately, but do not use metadata as AI context.
     _attachedDoc = _AttachedDoc(
       filename: doc.title,
-      extractedText: [
-        'Titre: ${doc.title}',
-        if (doc.matiereName != null) 'Matière: ${doc.matiereName}',
-        if (doc.classeName != null) 'Classe: ${doc.classeName}',
-        if (doc.levelName != null) 'Niveau: ${doc.levelName}',
-        if (doc.typeExamenName != null) "Type d'examen: ${doc.typeExamenName}",
-        if (doc.annee != null) 'Année: ${doc.annee}',
-        if (doc.hasCorrige) 'Corrigé disponible: Oui',
-      ].join('\n'),
+      extractedText: '',
       isImage: doc.isImage,
       pageCount: 1,
     );
 
     _isUploading = true;
+    var loadedContent = false;
 
     try {
       final res = await ApiClient.instance.dio.post(
@@ -167,12 +160,20 @@ class _AiChatScreenState extends State<AiChatScreen> {
         );
         _isUploading = false;
       });
+      loadedContent = (_attachedDoc?.extractedText.trim().isNotEmpty ?? false);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _isUploading = false);
+      setState(() {
+        _isUploading = false;
+        _messages.add(_Message(
+          role: 'ai',
+          text: "Je n'ai pas pu lire le contenu du fichier. Réessaie après avoir vérifié que le fichier est bien disponible.",
+          isError: true,
+        ));
+      });
     }
 
-    if (mounted) _triggerInitialSend(doc);
+    if (mounted && loadedContent) _triggerInitialSend(doc);
   }
 
   void _triggerInitialSend(DocumentModel doc) {

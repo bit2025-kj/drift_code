@@ -86,6 +86,203 @@ class _DiscussionDetailScreenState
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 
+  bool _isDiscussionOwner(DiscussionDetailModel? disc) {
+    final currentUserId = ref.read(authProvider).user?.id;
+    return currentUserId != null && disc?.author.id == currentUserId;
+  }
+
+  bool _isCommentOwner(String commentId) {
+    final currentUserId = ref.read(authProvider).user?.id;
+    if (currentUserId == null) return false;
+    final disc = ref.read(discussionDetailProvider(widget.discussionId)).value;
+    if (disc == null) return false;
+    for (final comment in disc.comments) {
+      if (comment.id == commentId) return comment.author.id == currentUserId;
+      for (final reply in comment.replies) {
+        if (reply.id == commentId) return reply.author.id == currentUserId;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _editDiscussion(DiscussionDetailModel disc) async {
+    if (!_isDiscussionOwner(disc)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Vous ne pouvez modifier que vos propres publications.'),
+        ),
+      );
+      return;
+    }
+
+    final titleCtrl = TextEditingController(text: disc.title);
+    final contentCtrl = TextEditingController(text: disc.content);
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20, right: 20, top: 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Modifier la publication',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: titleCtrl,
+            decoration: const InputDecoration(labelText: 'Titre'),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: contentCtrl,
+            decoration: const InputDecoration(labelText: 'Contenu'),
+            maxLines: 5,
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler'))),
+            const SizedBox(width: 12),
+            Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer'))),
+          ]),
+          const SizedBox(height: 16),
+        ]),
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      titleCtrl.dispose();
+      contentCtrl.dispose();
+      return;
+    }
+    try {
+      await ApiClient.instance.dio.patch(
+        ApiEndpoints.updateDiscussion(widget.discussionId),
+        data: {'title': titleCtrl.text.trim(), 'content': contentCtrl.text.trim()},
+      );
+      ref.invalidate(discussionDetailProvider(widget.discussionId));
+      ref.invalidate(discussionProvider);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la modification')));
+    } finally {
+      titleCtrl.dispose();
+      contentCtrl.dispose();
+    }
+  }
+
+  Future<void> _deleteDiscussion() async {
+    final disc = ref.read(discussionDetailProvider(widget.discussionId)).value;
+    if (!_isDiscussionOwner(disc)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Vous ne pouvez supprimer que vos propres publications.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer cette publication ?'),
+        content: const Text('Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiClient.instance.dio.delete(ApiEndpoints.discussion(widget.discussionId));
+      ref.invalidate(discussionProvider);
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la suppression')));
+    }
+  }
+
+  Future<void> _deleteComment(String commentId) async {
+    if (!_isCommentOwner(commentId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Vous ne pouvez supprimer que vos propres commentaires.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer ce commentaire ?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiClient.instance.dio.delete(ApiEndpoints.deleteComment(widget.discussionId, commentId));
+      ref.invalidate(discussionDetailProvider(widget.discussionId));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la suppression')));
+    }
+  }
+
+  Future<void> _editComment(String commentId, String currentContent) async {
+    if (!_isCommentOwner(commentId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Vous ne pouvez modifier que vos propres commentaires.'),
+        ),
+      );
+      return;
+    }
+
+    final ctrl = TextEditingController(text: currentContent);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Modifier le commentaire'),
+        content: TextField(controller: ctrl, maxLines: 4, decoration: const InputDecoration(labelText: 'Contenu')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      ctrl.dispose();
+      return;
+    }
+    try {
+      await ApiClient.instance.dio.patch(
+        ApiEndpoints.updateComment(widget.discussionId, commentId),
+        data: {'content': ctrl.text.trim()},
+      );
+      ref.invalidate(discussionDetailProvider(widget.discussionId));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la modification')));
+    } finally {
+      ctrl.dispose();
+    }
+  }
+
   Future<void> _postComment() async {
     final content = _commentController.text.trim();
     if (content.isEmpty) return;
@@ -171,6 +368,10 @@ class _DiscussionDetailScreenState
     final detailAsync =
         ref.watch(discussionDetailProvider(widget.discussionId));
 
+    final currentUserId = ref.watch(authProvider).user?.id;
+    final isOwner = detailAsync.value?.author.id == currentUserId &&
+        currentUserId != null;
+
     return Scaffold(
       backgroundColor: _kFeedBg,
       appBar: AppBar(
@@ -186,6 +387,8 @@ class _DiscussionDetailScreenState
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) {
+              if (v == 'edit') _editDiscussion(detailAsync.value!);
+              if (v == 'delete') _deleteDiscussion();
               if (v == 'report') {
                 showReportDialog(context,
                     contentType: 'discussion',
@@ -193,6 +396,10 @@ class _DiscussionDetailScreenState
               }
             },
             itemBuilder: (_) => [
+              if (isOwner) ...[
+                const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Modifier')])),
+                const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppColors.error), SizedBox(width: 8), Text('Supprimer', style: TextStyle(color: AppColors.error))])),
+              ],
               const PopupMenuItem(
                 value: 'report',
                 child: Row(children: [
@@ -282,6 +489,9 @@ class _DiscussionDetailScreenState
                                   startReply: _startReply,
                                   commentLiked: _commentLiked,
                                   commentLikesCount: _commentLikesCount,
+                                  currentUserId: currentUserId,
+                                  onDelete: _deleteComment,
+                                  onEdit: _editComment,
                                 ))
                             .toList(),
                       ),
@@ -478,6 +688,9 @@ class _CommentTile extends StatefulWidget {
   final void Function(String, String) startReply;
   final Map<String, bool> commentLiked;
   final Map<String, int> commentLikesCount;
+  final String? currentUserId;
+  final Future<void> Function(String)? onDelete;
+  final Future<void> Function(String, String)? onEdit;
 
   const _CommentTile({
     required this.comment,
@@ -490,6 +703,9 @@ class _CommentTile extends StatefulWidget {
     required this.startReply,
     required this.commentLiked,
     required this.commentLikesCount,
+    this.currentUserId,
+    this.onDelete,
+    this.onEdit,
   });
 
   @override
@@ -622,6 +838,24 @@ class _CommentTileState extends State<_CommentTile>
                                   color: kActionGray),
                             ),
                           ),
+                          // Owner actions
+                          if (widget.currentUserId != null &&
+                              widget.currentUserId == c.author.id) ...[
+                            const SizedBox(width: 4),
+                            PopupMenuButton<String>(
+                              iconSize: 16,
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.more_horiz, size: 16, color: kActionGray),
+                              onSelected: (v) {
+                                if (v == 'edit') widget.onEdit?.call(c.id, c.content);
+                                if (v == 'delete') widget.onDelete?.call(c.id);
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 16), SizedBox(width: 8), Text('Modifier', style: TextStyle(fontSize: 13))])),
+                                const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 16, color: AppColors.error), SizedBox(width: 8), Text('Supprimer', style: TextStyle(color: AppColors.error, fontSize: 13))])),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -668,6 +902,9 @@ class _CommentTileState extends State<_CommentTile>
                             onLike: () => widget.likeComment(r.id),
                             onReply: () => widget.startReply(c.id, r.author.fullName),
                             relativeTime: widget.relativeTime,
+                            currentUserId: widget.currentUserId,
+                            onDelete: widget.onDelete,
+                            onEdit: widget.onEdit,
                           ))
                       .toList(),
                 ),
@@ -689,6 +926,9 @@ class _ReplyTile extends StatelessWidget {
   final VoidCallback onLike;
   final VoidCallback onReply;
   final String Function(DateTime) relativeTime;
+  final String? currentUserId;
+  final Future<void> Function(String)? onDelete;
+  final Future<void> Function(String, String)? onEdit;
 
   const _ReplyTile({
     required this.reply,
@@ -697,11 +937,16 @@ class _ReplyTile extends StatelessWidget {
     required this.onLike,
     required this.onReply,
     required this.relativeTime,
+    this.currentUserId,
+    this.onDelete,
+    this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
     final r = reply;
+    final isOwner = currentUserId != null && currentUserId == r.author.id;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -783,6 +1028,41 @@ class _ReplyTile extends StatelessWidget {
                               color: kActionGray),
                         ),
                       ),
+                      if (isOwner) ...[
+                        const SizedBox(width: 4),
+                        PopupMenuButton<String>(
+                          iconSize: 16,
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.more_horiz,
+                              size: 16, color: kActionGray),
+                          onSelected: (v) {
+                            if (v == 'edit') onEdit?.call(r.id, r.content);
+                            if (v == 'delete') onDelete?.call(r.id);
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(children: [
+                                Icon(Icons.edit_outlined, size: 16),
+                                SizedBox(width: 8),
+                                Text('Modifier',
+                                    style: TextStyle(fontSize: 13)),
+                              ]),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(children: [
+                                Icon(Icons.delete_outline,
+                                    size: 16, color: AppColors.error),
+                                SizedBox(width: 8),
+                                Text('Supprimer',
+                                    style: TextStyle(
+                                        color: AppColors.error, fontSize: 13)),
+                              ]),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -370,6 +370,91 @@ async def delete_discussion(
     return
 
 
+# ── Modifier une discussion (propriétaire uniquement) ────────────────────────
+
+class _DiscUpdate(BaseModel):
+    title: str | None = None
+    content: str | None = None
+
+
+@router.patch("/{discussion_id}")
+async def update_discussion(
+    discussion_id: str,
+    data: _DiscUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    disc = (await db.execute(
+        select(Discussion).where(Discussion.id == discussion_id)
+    )).scalar_one_or_none()
+    if not disc:
+        raise HTTPException(status_code=404, detail="Discussion introuvable")
+    if disc.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    if data.title is not None:
+        disc.title = data.title
+    if data.content is not None:
+        disc.content = data.content
+    await db.commit()
+    return {"message": "Discussion mise à jour"}
+
+
+# ── Modifier / Supprimer un commentaire (propriétaire uniquement) ─────────────
+
+class _CommentUpdate(BaseModel):
+    content: str
+
+
+@router.patch("/{discussion_id}/comments/{comment_id}")
+async def update_comment(
+    discussion_id: str,
+    comment_id: str,
+    data: _CommentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = (await db.execute(
+        select(DiscussionComment).where(
+            DiscussionComment.id == comment_id,
+            DiscussionComment.discussion_id == discussion_id,
+        )
+    )).scalar_one_or_none()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Commentaire introuvable")
+    if comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    comment.content = data.content
+    await db.commit()
+    return {"message": "Commentaire modifié"}
+
+
+@router.delete("/{discussion_id}/comments/{comment_id}", status_code=204)
+async def delete_comment(
+    discussion_id: str,
+    comment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    comment = (await db.execute(
+        select(DiscussionComment).where(
+            DiscussionComment.id == comment_id,
+            DiscussionComment.discussion_id == discussion_id,
+        )
+    )).scalar_one_or_none()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Commentaire introuvable")
+    if comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Action non autorisée")
+    comment.is_active = False
+    disc = (await db.execute(
+        select(Discussion).where(Discussion.id == discussion_id)
+    )).scalar_one_or_none()
+    if disc:
+        disc.comments_count = max(0, disc.comments_count - 1)
+    await db.commit()
+    return
+
+
 # ── Signalement ───────────────────────────────────────────────────────────────
 
 @router.post("/{discussion_id}/report", status_code=201)

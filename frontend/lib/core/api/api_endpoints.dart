@@ -38,6 +38,8 @@ class ApiEndpoints {
   static String downloadDocument(String id) => '/documents/$id/download';
   static String favoriteDocument(String id) => '/documents/$id/favorite';
   static String likeDocument(String id) => '/documents/$id/like';
+  static String updateDocument(String id) => '/documents/$id';
+  static String deleteDocument(String id) => '/documents/$id';
 
   // ── Quiz ─────────────────────────────────────────────────────────────────────
   static const quizList = '/quiz';
@@ -61,6 +63,9 @@ class ApiEndpoints {
   static String likeDiscussion(String id) => '/forum/$id/like';
   static String likeComment(String did, String cid) => '/forum/$did/comments/$cid/like';
   static String markSolution(String did, String cid) => '/forum/$did/comments/$cid/solution';
+  static String updateDiscussion(String id) => '/forum/$id';
+  static String updateComment(String did, String cid) => '/forum/$did/comments/$cid';
+  static String deleteComment(String did, String cid) => '/forum/$did/comments/$cid';
 
   // ── Marketplace ──────────────────────────────────────────────────────────────
   static const products = '/marketplace';

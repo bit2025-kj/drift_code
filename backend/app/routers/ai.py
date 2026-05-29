@@ -1,6 +1,8 @@
 import json
 import asyncio
 import os
+import mimetypes
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -11,6 +13,7 @@ from app.utils.auth import get_current_user
 from app.models.user import User
 from app.models.document import Document
 from app.config import settings
+from app.utils.storage import local_path_from_url
 from mistralai import Mistral
 
 router = APIRouter(prefix="/ai", tags=["AI"])
@@ -242,6 +245,25 @@ Chaque réponse doit :
 """
 
 
+_DOCUMENT_RULES = """
+
+# RÈGLES DOCUMENT (OBLIGATOIRE)
+
+Quand un contenu de document est fourni :
+
+* utilise UNIQUEMENT le contenu extrait du fichier ;
+* ignore le titre, la matière, la classe et toute métadonnée pour répondre ;
+* n'invente jamais une question, une donnée, une formule, une page ou une correction ;
+* si l'information n'est pas dans le contenu fourni, réponds : "Je ne le vois pas dans le document." ;
+* réponds court : 3 à 6 lignes maximum, sauf si l'élève demande une correction détaillée ;
+* cite seulement les éléments réellement présents dans le document.
+"""
+
+_MAX_TEXT_CHARS = 60000
+_MAX_PDF_TEXT_PAGES = 40
+_MAX_PDF_OCR_PAGES = 12
+
+
 class ChatMessage(BaseModel):
     role: str  # "user" | "assistant"
     content: str
@@ -274,15 +296,45 @@ def _extract_pdf_text(content: bytes) -> tuple[str, int]:
         doc = pdfium.PdfDocument(content)
         page_count = len(doc)
         texts = []
-        for i in range(min(page_count, 15)):
+        chars = 0
+        for i in range(min(page_count, _MAX_PDF_TEXT_PAGES)):
             page = doc.get_page(i)
             textpage = page.get_textpage()
             text = textpage.get_text_range()
             if text and text.strip():
-                texts.append(f"[Page {i + 1}]\n{text.strip()}")
-        return '\n\n'.join(texts), page_count
+                block = f"[Page {i + 1}]\n{text.strip()}"
+                texts.append(block)
+                chars += len(block)
+                if chars >= _MAX_TEXT_CHARS:
+                    break
+        extracted = '\n\n'.join(texts)
+        if page_count > _MAX_PDF_TEXT_PAGES:
+            extracted += f"\n\n[Note: seules les {_MAX_PDF_TEXT_PAGES} premières pages ont été extraites automatiquement.]"
+        return extracted[:_MAX_TEXT_CHARS], page_count
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Impossible de lire le PDF: {str(e)}")
+
+
+def _render_pdf_pages_as_images(pdf_bytes: bytes, max_pages: int = _MAX_PDF_OCR_PAGES) -> tuple[list[bytes], int]:
+    try:
+        import io
+        import pypdfium2 as pdfium
+
+        doc = pdfium.PdfDocument(pdf_bytes)
+        page_count = len(doc)
+        images: list[bytes] = []
+        for i in range(min(page_count, max_pages)):
+            page = doc[i]
+            width = page.get_width()
+            scale = 1400.0 / width if width > 0 else 2.0
+            bitmap = page.render(scale=scale, rotation=0)
+            buf = io.BytesIO()
+            bitmap.to_pil().save(buf, format="JPEG", quality=90)
+            images.append(buf.getvalue())
+        doc.close()
+        return images, page_count
+    except Exception:
+        return [], 0
 
 
 async def _describe_image_with_ai(image_bytes: bytes, media_type: str) -> str:
@@ -327,6 +379,74 @@ async def _describe_image_with_ai(image_bytes: bytes, media_type: str) -> str:
         return "[Document image joint - le contenu n'a pas pu être extrait automatiquement]"
 
 
+async def _ocr_pdf_with_ai(pdf_bytes: bytes) -> tuple[str, int]:
+    images, page_count = _render_pdf_pages_as_images(pdf_bytes)
+    if not images:
+        return "", page_count or 1
+
+    pages = []
+    for index, image in enumerate(images, start=1):
+        text = await _describe_image_with_ai(image, "image/jpeg")
+        if text.strip():
+            pages.append(f"[Page {index}]\n{text.strip()}")
+
+    extracted = "\n\n".join(pages)
+    if page_count > len(images):
+        extracted += f"\n\n[Note: seules les {len(images)} premières pages images ont pu être lues automatiquement.]"
+    return extracted[:_MAX_TEXT_CHARS], page_count
+
+
+async def _read_document_bytes(file_url: str) -> tuple[bytes, str, str]:
+    clean_url = file_url.split("?", 1)[0]
+    filename = os.path.basename(clean_url) or "document"
+
+    if file_url.startswith("http://") or file_url.startswith("https://"):
+        try:
+            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+                response = await client.get(file_url)
+                response.raise_for_status()
+            content_type = response.headers.get("content-type", "").split(";", 1)[0]
+            return response.content, filename, content_type
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=404, detail=f"Impossible de lire le fichier distant: {exc}")
+
+    if file_url.startswith("/uploads/"):
+        local_path = local_path_from_url(file_url)
+    else:
+        local_path = os.path.join(settings.UPLOAD_DIR, "documents", filename)
+
+    if not os.path.exists(local_path):
+        raise HTTPException(status_code=404, detail="Fichier introuvable sur le serveur")
+
+    with open(local_path, "rb") as f:
+        content = f.read()
+    return content, filename, mimetypes.guess_type(filename)[0] or ""
+
+
+async def _extract_document_content(content: bytes, filename: str, content_type: str) -> DocumentUploadResponse:
+    lower = filename.lower().split("?", 1)[0]
+    is_image = content_type.startswith("image/") or lower.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))
+    is_pdf = content_type == "application/pdf" or lower.endswith(".pdf")
+
+    if is_image:
+        text = await _describe_image_with_ai(content, content_type or "image/jpeg")
+        return DocumentUploadResponse(text=text, filename=filename, page_count=1, is_image=True)
+
+    if is_pdf:
+        try:
+            text, page_count = _extract_pdf_text(content)
+        except HTTPException:
+            text, page_count = "", 1
+
+        if not text.strip():
+            text, page_count = await _ocr_pdf_with_ai(content)
+        if not text.strip():
+            text = "[Le contenu du PDF n'a pas pu être lu automatiquement.]"
+        return DocumentUploadResponse(text=text, filename=filename, page_count=page_count, is_image=False)
+
+    raise HTTPException(status_code=415, detail="Format non supporté. Utilisez un PDF ou une image.")
+
+
 @router.post("/upload-document", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
@@ -337,28 +457,7 @@ async def upload_document(
     filename = file.filename or "document"
     content_type = file.content_type or ""
 
-    is_image = content_type.startswith("image/") or filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
-    is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf")
-
-    if is_pdf:
-        try:
-            text, page_count = _extract_pdf_text(content)
-        except HTTPException:
-            text, page_count = "", 1
-        if not text.strip():
-            from app.services.quiz_service import render_pdf_page_as_image
-            img_bytes = render_pdf_page_as_image(content)
-            if img_bytes:
-                text = await _describe_image_with_ai(img_bytes, "image/jpeg")
-            else:
-                text = "[Ce PDF ne contient pas de texte extractible et n'a pas pu être converti en image.]"
-        return DocumentUploadResponse(text=text, filename=filename, page_count=page_count, is_image=False)
-
-    if is_image:
-        text = await _describe_image_with_ai(content, content_type or "image/jpeg")
-        return DocumentUploadResponse(text=text, filename=filename, page_count=1, is_image=True)
-
-    raise HTTPException(status_code=415, detail="Format non supporté. Utilisez un PDF ou une image.")
+    return await _extract_document_content(content, filename, content_type)
 
 
 @router.post("/analyze-document", response_model=DocumentUploadResponse)
@@ -373,40 +472,8 @@ async def analyze_document(
     if not doc or not doc.file_url:
         raise HTTPException(status_code=404, detail="Document introuvable")
 
-    # file_url = "/uploads/documents/{id}{ext}" → local path
-    filename = os.path.basename(doc.file_url)
-    local_path = os.path.join(settings.UPLOAD_DIR, "documents", filename)
-
-    if not os.path.exists(local_path):
-        raise HTTPException(status_code=404, detail="Fichier introuvable sur le serveur")
-
-    with open(local_path, "rb") as f:
-        content = f.read()
-
-    ext = os.path.splitext(filename)[1].lower()
-    is_image_ext = ext in {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-
-    if is_image_ext:
-        import mimetypes
-        media_type = mimetypes.guess_type(filename)[0] or "image/jpeg"
-        text = await _describe_image_with_ai(content, media_type)
-        return DocumentUploadResponse(text=text, filename=filename, page_count=1, is_image=True)
-
-    # PDF (or unknown → treat as PDF)
-    try:
-        text, page_count = _extract_pdf_text(content)
-    except HTTPException:
-        text, page_count = "", 1
-
-    if not text.strip():
-        from app.services.quiz_service import render_pdf_page_as_image
-        img_bytes = render_pdf_page_as_image(content)
-        if img_bytes:
-            text = await _describe_image_with_ai(img_bytes, "image/jpeg")
-        else:
-            text = "[Ce PDF ne contient pas de texte extractible et n'a pas pu être converti en image.]"
-
-    return DocumentUploadResponse(text=text, filename=filename, page_count=page_count, is_image=False)
+    content, filename, content_type = await _read_document_bytes(doc.file_url)
+    return await _extract_document_content(content, filename, content_type)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -419,7 +486,12 @@ async def chat(
 
     system = _SYSTEM_PROMPT
     if body.document_context:
-        system += f"\n\nL'élève t'a partagé le contenu d'un document. Utilise-le pour répondre à ses questions :\n\n---\n{body.document_context[:8000]}\n---"
+        system += (
+            _DOCUMENT_RULES
+            + "\n\nCONTENU EXTRAIT DU FICHIER (pas des métadonnées) :\n\n---\n"
+            + body.document_context[:_MAX_TEXT_CHARS]
+            + "\n---"
+        )
 
     try:
         client = Mistral(api_key=settings.MISTRAL_API_KEY)
@@ -447,7 +519,12 @@ async def chat_stream(
 
     system = _SYSTEM_PROMPT
     if body.document_context:
-        system += f"\n\nDocument de l'élève :\n\n---\n{body.document_context[:8000]}\n---"
+        system += (
+            _DOCUMENT_RULES
+            + "\n\nCONTENU EXTRAIT DU FICHIER (pas des métadonnées) :\n\n---\n"
+            + body.document_context[:_MAX_TEXT_CHARS]
+            + "\n---"
+        )
 
     msgs = [
         {"role": "system", "content": system},
