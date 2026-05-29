@@ -8,6 +8,7 @@ import 'package:nafa_edu/models/forum_model.dart';
 import 'package:nafa_edu/providers/forum_provider.dart';
 import 'package:nafa_edu/screens/forum/forum_widgets.dart';
 import 'package:nafa_edu/widgets/report_dialog.dart';
+import 'package:nafa_edu/core/utils/auth_utils.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kTimestampColor = Color(0xFF65676B);
@@ -284,6 +285,7 @@ class _DiscussionDetailScreenState
   }
 
   Future<void> _postComment() async {
+    if (!await requireAuth(context, ref)) return;
     final content = _commentController.text.trim();
     if (content.isEmpty) return;
     setState(() => _isPosting = true);
@@ -312,6 +314,7 @@ class _DiscussionDetailScreenState
   }
 
   Future<void> _likeDiscussion() async {
+    if (!await requireAuth(context, ref)) return;
     final prevLiked = _discussionLiked ?? false;
     final prevCount = _discussionLikesCount ?? 0;
     setState(() {
@@ -334,6 +337,7 @@ class _DiscussionDetailScreenState
   }
 
   Future<void> _likeComment(String commentId) async {
+    if (!await requireAuth(context, ref)) return;
     final prevLiked = _commentLiked[commentId] ?? false;
     final prevCount = _commentLikesCount[commentId] ?? 0;
     setState(() {
@@ -355,7 +359,8 @@ class _DiscussionDetailScreenState
     }
   }
 
-  void _startReply(String commentId, String authorName) {
+  void _startReply(String commentId, String authorName) async {
+    if (!await requireAuth(context, ref)) return;
     setState(() {
       _replyToId = commentId;
       _replyToName = authorName;

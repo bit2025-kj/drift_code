@@ -21,6 +21,8 @@ import 'package:nafa_edu/widgets/network_error_widget.dart';
 import 'package:nafa_edu/screens/home/publish_sheet.dart';
 import 'package:nafa_edu/providers/notification_provider.dart';
 import 'package:nafa_edu/screens/notifications/notification_screen.dart';
+import 'package:nafa_edu/screens/notifications/notification_screen.dart';
+import 'package:nafa_edu/core/utils/auth_utils.dart';
 import 'package:shimmer/shimmer.dart';
 
 class BanqueScreen extends ConsumerStatefulWidget {
@@ -258,7 +260,11 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
         children: [
           Expanded(
             child: GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
+              onTap: () async {
+                if (!await requireAuth(context, ref)) return;
+                if (!context.mounted) return;
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen()));
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
@@ -297,12 +303,16 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: GestureDetector(
-              onTap: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const PublishSheet(),
-              ),
+              onTap: () async {
+                if (!await requireAuth(context, ref)) return;
+                if (!context.mounted) return;
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const PublishSheet(),
+                );
+              },
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
@@ -892,6 +902,7 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
   }
 
   Future<void> _toggleFavorite() async {
+    if (!await requireAuth(context, ref)) return;
     setState(() => _isFavorite = !_isFavorite);
     try {
       await ApiClient.instance.dio.post(ApiEndpoints.favoriteDocument(widget.doc.id));
@@ -901,6 +912,7 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
   }
 
   Future<void> _download() async {
+    if (!await requireAuth(context, ref)) return;
     setState(() => _isDownloading = true);
     try {
       final path = await DownloadManager.instance.downloadDocument(widget.doc);
@@ -1294,12 +1306,16 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
                       const Spacer(),
                       // AI button
                       GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AiChatScreen(attachedDocument: widget.doc),
-                          ),
-                        ),
+                        onTap: () async {
+                          if (!await requireAuth(context, ref)) return;
+                          if (!context.mounted) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AiChatScreen(attachedDocument: widget.doc),
+                            ),
+                          );
+                        },
                         child: Container(
                           width: 30, height: 30,
                           margin: const EdgeInsets.only(right: 6),

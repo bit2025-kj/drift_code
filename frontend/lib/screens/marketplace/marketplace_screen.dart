@@ -10,6 +10,7 @@ import 'package:nafa_edu/screens/marketplace/create_product_screen.dart';
 import 'package:nafa_edu/screens/marketplace/product_detail_screen.dart';
 import 'package:nafa_edu/screens/marketplace/teacher_dashboard_screen.dart';
 import 'package:nafa_edu/screens/marketplace/teacher_request_screen.dart';
+import 'package:nafa_edu/core/utils/auth_utils.dart';
 
 const _kTypes = ['Tous', 'Cours', 'Packs', 'Sujets & Corrigés', 'Résumés', 'Vidéos'];
 const _kTypeValues = [null, 'cours', 'pack', 'sujet_corrige', 'resume', 'video'];
@@ -198,10 +199,14 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   Widget _buildBecomeProfBanner(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const TeacherRequestScreen()),
-      ),
+      onTap: () async {
+        if (!await requireAuth(context, ref)) return;
+        if (!context.mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TeacherRequestScreen()),
+        );
+      },
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
         padding: const EdgeInsets.all(16),
@@ -428,6 +433,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
   }
 
   Future<void> _purchase(BuildContext context, ProductModel product) async {
+    if (!await requireAuth(context, ref)) return;
     if (product.isFree) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Contenu gratuit — accès direct !')),

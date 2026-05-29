@@ -18,6 +18,7 @@ import 'package:nafa_edu/screens/admin/admin_shell.dart';
 import 'package:nafa_edu/screens/profil/settings_screen.dart';
 import 'package:nafa_edu/screens/quiz/quiz_history_screen.dart';
 import 'package:nafa_edu/widgets/network_error_widget.dart';
+import 'package:nafa_edu/core/utils/auth_utils.dart';
 
 class ProfilScreen extends ConsumerStatefulWidget {
   const ProfilScreen({super.key});
@@ -81,8 +82,34 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(authProvider).user;
-    if (user == null) return const Center(child: CircularProgressIndicator());
+    final authState = ref.watch(authProvider);
+    final user = authState.user;
+    
+    if (authState.status == AuthStatus.loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    
+    if (user == null || authState.status == AuthStatus.unauthenticated) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text('Profil')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.account_circle_outlined, size: 80, color: AppColors.textSecondary),
+              const SizedBox(height: 16),
+              const Text('Connectez-vous pour accéder à votre profil', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => requireAuth(context, ref),
+                child: const Text('Se connecter'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final statsAsync = ref.watch(userStatsProvider);
     final badgesAsync = ref.watch(userBadgesProvider);
 

@@ -11,6 +11,7 @@ import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/providers/document_provider.dart';
 import 'package:nafa_edu/services/download_manager.dart';
 import 'package:nafa_edu/widgets/report_dialog.dart';
+import 'package:nafa_edu/core/utils/auth_utils.dart';
 
 class DocumentDetailScreen extends ConsumerStatefulWidget {
   final DocumentModel document;
@@ -43,6 +44,7 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
   bool get _canManageDocument => _isOwner(ref.read(authProvider).user?.id);
 
   Future<void> _toggleFavorite() async {
+    if (!await requireAuth(context, ref)) return;
     setState(() => _isLoadingFav = true);
     try {
       await ApiClient.instance.dio.post(ApiEndpoints.favoriteDocument(doc.id));
@@ -52,6 +54,7 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
   }
 
   Future<void> _toggleLike() async {
+    if (!await requireAuth(context, ref)) return;
     // optimistic update
     setState(() {
       _isLiked = !_isLiked;
@@ -78,6 +81,7 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
   }
 
   Future<void> _download({bool isCorrige = false}) async {
+    if (!await requireAuth(context, ref)) return;
     setState(() => _isDownloading = true);
     final path = await DownloadManager.instance.downloadDocument(
       doc,
@@ -223,7 +227,9 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
     }
   }
 
-  void _openReader(DocumentModel readerDoc) {
+  void _openReader(DocumentModel readerDoc) async {
+    if (!await requireAuth(context, ref)) return;
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => DocumentReaderScreen(document: readerDoc)),

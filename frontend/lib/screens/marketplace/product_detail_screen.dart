@@ -12,6 +12,7 @@ import 'package:nafa_edu/screens/shared/pdf_viewer_screen.dart';
 import 'package:nafa_edu/screens/shared/video_player_screen.dart';
 import 'package:nafa_edu/widgets/report_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:nafa_edu/core/utils/auth_utils.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final ProductModel product;
@@ -41,6 +42,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       url.startsWith('http') ? url : '${AppConstants.baseUrl}$url';
 
   Future<void> _openUrl(String url) async {
+    if (!await requireAuth(context, ref)) return;
     final full = _fullUrl(url);
     final lower = full.toLowerCase().split('?').first;
     if (!mounted) return;
@@ -180,6 +182,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   Future<void> _purchase() async {
+    if (!await requireAuth(context, ref)) return;
     if (prod.isFree) {
       if (prod.mediaUrls.isNotEmpty) {
         await _openUrl(prod.mediaUrls.first.url);

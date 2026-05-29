@@ -55,7 +55,7 @@ class _AuthGate extends ConsumerWidget {
       case AuthStatus.authenticated:
         return auth.user?.isAdmin == true ? const AdminShell() : const MainShell();
       case AuthStatus.unauthenticated:
-        return const LoginScreen();
+        return const MainShell(); // Guest access
     }
   }
 }

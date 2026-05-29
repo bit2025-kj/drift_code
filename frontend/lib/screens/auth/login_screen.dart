@@ -6,7 +6,8 @@ import 'package:nafa_edu/screens/auth/register_screen.dart';
 import 'package:nafa_edu/screens/auth/forgot_password_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  final bool isModal;
+  const LoginScreen({super.key, this.isModal = false});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -49,8 +50,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error ?? 'Erreur de connexion'), backgroundColor: AppColors.error),
         );
+      } else {
+        if (widget.isModal) {
+          Navigator.pop(context, true);
+        }
       }
-      // Routing handled by _AuthGate watching authProvider
+      // If not modal, _AuthGate will handle routing automatically.
     }
   }
 
@@ -66,7 +71,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 40),
+                if (widget.isModal)
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
+                  ),
+                if (!widget.isModal) const SizedBox(height: 40),
                 _buildLogo(),
                 const SizedBox(height: 40),
                 const Text('Bienvenue !', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),

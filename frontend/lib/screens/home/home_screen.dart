@@ -18,6 +18,7 @@ import 'package:nafa_edu/screens/notifications/notification_screen.dart';
 import 'package:nafa_edu/screens/marketplace/teacher_request_screen.dart';
 import 'package:nafa_edu/screens/downloads_screen.dart';
 import 'package:nafa_edu/widgets/network_error_widget.dart';
+import 'package:nafa_edu/core/utils/auth_utils.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -54,7 +55,7 @@ class HomeScreen extends ConsumerWidget {
                 child: trending.when(
                   data: (docs) => docs.isEmpty
                       ? _buildEmptySection('Aucun document tendance pour le moment')
-                      : _buildTrendingCards(context, docs),
+                      : _buildTrendingCards(context, ref, docs),
                   loading: () => _buildShimmerRow(155, 185),
                   error: (e, _) => NetworkErrorWidget(error: e, compact: true, onRetry: () => ref.invalidate(trendingDocumentsProvider)),
                 ),
@@ -84,7 +85,7 @@ class HomeScreen extends ConsumerWidget {
                 child: newDocs.when(
                   data: (docs) => docs.isEmpty
                       ? _buildEmptySection('Aucun nouveau document')
-                      : _buildNewDocs(context, docs),
+                      : _buildNewDocs(context, ref, docs),
                   loading: () => _buildShimmerRow(140, 160),
                   error: (e, _) => NetworkErrorWidget(error: e, compact: true, onRetry: () => ref.invalidate(newDocumentsProvider)),
                 ),
@@ -101,8 +102,16 @@ class HomeScreen extends ConsumerWidget {
           ),
           // Draggable + collapsible FABs
           _DraggableFABGroup(
-            onAITap: () => _showAIChat(context),
-            onPublishTap: () => _showPublishSheet(context),
+            onAITap: () async {
+              if (!await requireAuth(context, ref)) return;
+              if (!context.mounted) return;
+              _showAIChat(context);
+            },
+            onPublishTap: () async {
+              if (!await requireAuth(context, ref)) return;
+              if (!context.mounted) return;
+              _showPublishSheet(context);
+            },
           ),
         ],
       ),
@@ -360,7 +369,7 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
 
   // ── Trending cards ────────────────────────────────────────────────────────────
 
-  Widget _buildTrendingCards(BuildContext context, List<DocumentModel> docs) {
+  Widget _buildTrendingCards(BuildContext context, WidgetRef ref, List<DocumentModel> docs) {
     final pdfColors = [
       const Color(0xFFE03131), const Color(0xFF7048E8),
       const Color(0xFF1C7ED6), const Color(0xFF2F9E44), const Color(0xFFE67700),
@@ -468,7 +477,11 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
                     child: GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AiChatScreen(attachedDocument: doc))),
+                      onTap: () async {
+                        if (!await requireAuth(context, ref)) return;
+                        if (!context.mounted) return;
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => AiChatScreen(attachedDocument: doc)));
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                         decoration: BoxDecoration(
@@ -596,7 +609,7 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
 
   // ── Nouveaux sujets ───────────────────────────────────────────────────────────
 
-  Widget _buildNewDocs(BuildContext context, List<DocumentModel> docs) {
+  Widget _buildNewDocs(BuildContext context, WidgetRef ref, List<DocumentModel> docs) {
     final pdfColors = [const Color(0xFFE03131), const Color(0xFF7048E8), const Color(0xFF1C7ED6), const Color(0xFF2F9E44)];
     return SizedBox(
       height: 165,
@@ -669,7 +682,11 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                     child: GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AiChatScreen(attachedDocument: doc))),
+                      onTap: () async {
+                        if (!await requireAuth(context, ref)) return;
+                        if (!context.mounted) return;
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => AiChatScreen(attachedDocument: doc)));
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                         decoration: BoxDecoration(
@@ -1083,7 +1100,11 @@ class _OnboardingCarouselState extends ConsumerState<_OnboardingCarousel> {
                 style: GoogleFonts.inter(fontSize: 11, color: Colors.white.withValues(alpha: 0.82), height: 1.5)),
               const SizedBox(height: 12),
               GestureDetector(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
+                onTap: () async {
+                  if (!await requireAuth(context, ref)) return;
+                  if (!mounted) return;
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen()));
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(

@@ -56,9 +56,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (success) {
-        // Pop RegisterScreen (and LoginScreen below it) so _AuthGate can
-        // swap in MainShell cleanly without stale routes on the stack.
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // Return to the previous screen (MainShell or the protected action)
+        Navigator.pop(context, true);
       } else {
         final error = ref.read(authProvider).error;
         ScaffoldMessenger.of(context).showSnackBar(

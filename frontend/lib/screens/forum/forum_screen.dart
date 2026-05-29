@@ -9,6 +9,7 @@ import 'package:nafa_edu/screens/forum/discussion_detail_screen.dart';
 import 'package:nafa_edu/screens/forum/forum_widgets.dart';
 import 'package:nafa_edu/services/sync_service.dart';
 import 'package:nafa_edu/widgets/network_error_widget.dart';
+import 'package:nafa_edu/core/utils/auth_utils.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kFeedBg = Color(0xFFF0F2F5);
@@ -106,27 +107,37 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
               return _PostCard(
                 discussion: d,
                 isLiked: state.likedIds.contains(d.id),
-                onLike: () =>
-                    ref.read(discussionProvider.notifier).toggleLike(d.id),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DiscussionDetailScreen(
-                      discussionId: d.id,
-                      title: d.title,
+                onLike: () async {
+                  if (!await requireAuth(context, ref)) return;
+                  ref.read(discussionProvider.notifier).toggleLike(d.id);
+                },
+                onTap: () async {
+                  if (!await requireAuth(context, ref)) return;
+                  if (!context.mounted) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DiscussionDetailScreen(
+                        discussionId: d.id,
+                        title: d.title,
+                      ),
                     ),
-                  ),
-                ),
-                onComment: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DiscussionDetailScreen(
-                      discussionId: d.id,
-                      title: d.title,
-                      autoFocusComment: true,
+                  );
+                },
+                onComment: () async {
+                  if (!await requireAuth(context, ref)) return;
+                  if (!context.mounted) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DiscussionDetailScreen(
+                        discussionId: d.id,
+                        title: d.title,
+                        autoFocusComment: true,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             }
             // Load-more indicator
@@ -146,7 +157,9 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
     );
   }
 
-  void _openComposer(BuildContext context) {
+  Future<void> _openComposer(BuildContext context) async {
+    if (!await requireAuth(context, ref)) return;
+    if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
