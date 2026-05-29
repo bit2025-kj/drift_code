@@ -14,13 +14,18 @@ def _build_connect_args(url: str) -> dict:
     return {}
 
 
+engine_kwargs = {
+    "echo": False,
+    "pool_pre_ping": True,
+    "connect_args": _build_connect_args(settings.DATABASE_URL),
+}
+if not settings.DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["pool_size"] = 5
+    engine_kwargs["max_overflow"] = 10
+
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
-    connect_args=_build_connect_args(settings.DATABASE_URL),
+    **engine_kwargs
 )
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 

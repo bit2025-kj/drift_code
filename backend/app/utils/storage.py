@@ -38,12 +38,10 @@ async def upload_file(content: bytes, path: str, resource_type: str = "auto") ->
     if _init_cloudinary():
         return await asyncio.to_thread(_upload_cloudinary_sync, content, path, resource_type)
     if _is_ephemeral_host():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Stockage cloud non configuré. Ajoutez CLOUDINARY_URL sur Render "
-                "avant de publier des fichiers."
-            ),
+        print(
+            "[WARNING] Cloud storage not configured on Render. "
+            "Files will be saved locally and lost on next restart/deploy! "
+            "Configure CLOUDINARY_URL on Render for permanent storage."
         )
     return _upload_local(content, path)
 

@@ -247,16 +247,14 @@ Chaque réponse doit :
 
 _DOCUMENT_RULES = """
 
-# RÈGLES DOCUMENT (OBLIGATOIRE)
+# RÈGLES DOCUMENT DE COURS / SUJET (OBLIGATOIRE ET TRÈS STRICT)
 
-Quand un contenu de document est fourni :
-
-* utilise UNIQUEMENT le contenu extrait du fichier ;
-* ignore le titre, la matière, la classe et toute métadonnée pour répondre ;
-* n'invente jamais une question, une donnée, une formule, une page ou une correction ;
-* si l'information n'est pas dans le contenu fourni, réponds : "Je ne le vois pas dans le document." ;
-* réponds court : 3 à 6 lignes maximum, sauf si l'élève demande une correction détaillée ;
-* cite seulement les éléments réellement présents dans le document.
+Tu dois respecter scrupuleusement les consignes suivantes :
+* Tu dois répondre aux questions de l'élève en te basant UNIQUEMENT et EXCLUSIVEMENT sur le contenu extrait du document fourni ci-dessous.
+* Interdiction absolue d'inventer des informations, des formules, des exercices, ou des réponses qui ne figurent pas explicitement dans le document.
+* Si le contenu du document indique que l'extraction a échoué (par exemple s'il contient "[Le contenu du PDF n'a pas pu être lu automatiquement.]"), tu dois répondre poliment : "Désolé, je ne parviens pas à lire le contenu de ce document actuellement. Veuillez vous assurer que le fichier n'est pas vide ou corrompu." et ne rien imaginer d'autre.
+* Si l'information demandée n'est pas présente dans le texte extrait ci-dessous, tu dois obligatoirement répondre : "Je ne le vois pas dans le document." et refuser d'utiliser tes connaissances externes.
+* Ne fais jamais d'hypothèses en dehors du texte fourni. Reste extrêmement factuel et concis (3 à 6 lignes maximum pour les explications courantes).
 """
 
 _MAX_TEXT_CHARS = 60000

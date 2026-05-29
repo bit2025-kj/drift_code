@@ -555,7 +555,9 @@ async def get_product(product_id: str, db: AsyncSession = Depends(get_db)):
     product = result.scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="Produit introuvable")
-    _ensure_product_files_available(product)
+    # Do not block product viewing if some local files (e.g. preview) are missing on Render.
+    # The check remains active on purchase/download to prevent paying for missing files.
+    # _ensure_product_files_available(product)
     product.views_count += 1
     await db.commit()
     return _enrich_product(product)
