@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart'
     if (dart.library.html) 'package:nafa_edu/services/_path_provider_stub.dart';
@@ -110,6 +111,21 @@ class DownloadManager {
       );
 
       return savePath;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final detail = e.response?.data?['detail'] as String?;
+      final msg = detail ??
+          (code == 404
+              ? 'Fichier non disponible sur le serveur (404).\nConfigurez Cloudinary sur Render.'
+              : code != null
+                  ? 'Erreur serveur ($code)'
+                  : 'Erreur réseau — vérifiez votre connexion.');
+      notifier.value = DownloadProgress(
+        documentId: doc.id,
+        status: DownloadStatus.failed,
+        error: msg,
+      );
+      return null;
     } catch (e) {
       notifier.value = DownloadProgress(
         documentId: doc.id,

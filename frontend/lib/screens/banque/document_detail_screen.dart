@@ -72,26 +72,21 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
 
   Future<void> _download({bool isCorrige = false}) async {
     setState(() => _isDownloading = true);
-    try {
-      final path = await DownloadManager.instance.downloadDocument(
-        doc,
-        isCorrige: isCorrige,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              path != null ? 'Téléchargement réussi !' : 'Erreur lors du téléchargement'),
-          backgroundColor: path != null ? AppColors.success : null,
-        ));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erreur lors du téléchargement')),
-        );
-      }
+    final path = await DownloadManager.instance.downloadDocument(
+      doc,
+      isCorrige: isCorrige,
+    );
+    if (mounted) {
+      final error = DownloadManager.instance.progressOf(doc.id).value.error;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(path != null
+            ? 'Téléchargement réussi !'
+            : (error ?? 'Erreur de téléchargement')),
+        backgroundColor: path != null ? AppColors.success : AppColors.error,
+        duration: Duration(seconds: path != null ? 2 : 5),
+      ));
+      setState(() => _isDownloading = false);
     }
-    if (mounted) setState(() => _isDownloading = false);
   }
 
   void _openReader(DocumentModel readerDoc) {

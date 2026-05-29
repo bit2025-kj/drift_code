@@ -178,13 +178,25 @@ async def download_document(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Document introuvable")
 
+    file_url = doc.corrige_url if is_corrige else doc.file_url
+
+    # Local files on Render's ephemeral disk are lost on every restart.
+    # Return a clear error early rather than letting the client download a 404.
+    if file_url and file_url.startswith('/uploads/'):
+        local_path = os.path.join(settings.UPLOAD_DIR, file_url[len('/uploads/'):].lstrip('/'))
+        if not os.path.exists(local_path):
+            raise HTTPException(
+                status_code=404,
+                detail="Ce fichier n'est plus disponible (le serveur a redémarré). "
+                       "Configurez CLOUDINARY_URL sur Render pour éviter ce problème.",
+            )
+
     dl = Download(user_id=current_user.id, document_id=document_id, is_corrige=is_corrige)
     db.add(dl)
     doc.downloads_count += 1
     current_user.points += 5
     await db.commit()
 
-    file_url = doc.corrige_url if is_corrige else doc.file_url
     return {"file_url": file_url, "title": doc.title}
 
 
