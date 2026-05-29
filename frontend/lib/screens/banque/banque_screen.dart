@@ -940,7 +940,9 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
   }
 
   Widget _buildThumbnailPreview(DocumentModel doc) {
-    final url = '${AppConstants.baseUrl}${doc.thumbnailUrl}';
+    final url = doc.thumbnailUrl!.startsWith('http') 
+        ? doc.thumbnailUrl! 
+        : '${AppConstants.baseUrl}${doc.thumbnailUrl}';
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1000,7 +1002,9 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
   }
 
   Widget _buildImagePreview(DocumentModel doc) {
-    final url = '${AppConstants.baseUrl}${doc.fileUrl}';
+    final url = doc.fileUrl!.startsWith('http') 
+        ? doc.fileUrl! 
+        : '${AppConstants.baseUrl}${doc.fileUrl}';
     return Stack(
       fit: StackFit.expand,
       children: [
