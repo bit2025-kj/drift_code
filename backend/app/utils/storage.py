@@ -55,22 +55,25 @@ def _is_ephemeral_host() -> bool:
 
 def _upload_cloudinary_sync(content: bytes, path: str, resource_type: str) -> str:
     import cloudinary.uploader
-    # Keep the full path including extension as public_id so the returned URL
-    # preserves the extension (e.g. .pdf, .mp4) — needed for type detection in Flutter.
     public_id = path.replace("\\", "/")
     
-    if path.lower().endswith(".pdf"):
-        resource_type = "auto"
+    upload_kwargs = {
+        "public_id": public_id,
+        "resource_type": resource_type,
+        "overwrite": True,
+        "use_filename": False,
+    }
 
-    result = cloudinary.uploader.upload(
-        content,
-        public_id=public_id,
-        resource_type=resource_type,
-        upload_preset="ml_default",
-        overwrite=True,
-        use_filename=False,
-    )
-    return result["secure_url"]
+    if path.lower().endswith(".pdf"):
+        upload_kwargs["resource_type"] = "raw"
+        upload_kwargs["upload_preset"] = "ml_default"
+
+    try:
+        result = cloudinary.uploader.upload(content, **upload_kwargs)
+        return result["secure_url"]
+    except Exception as e:
+        print(f"❌ Erreur Cloudinary upload: {type(e).__name__} - {str(e)}")
+        raise
 
 
 def _upload_local(content: bytes, path: str) -> str:
