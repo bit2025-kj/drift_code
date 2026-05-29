@@ -58,10 +58,15 @@ def _upload_cloudinary_sync(content: bytes, path: str, resource_type: str) -> st
     # Keep the full path including extension as public_id so the returned URL
     # preserves the extension (e.g. .pdf, .mp4) — needed for type detection in Flutter.
     public_id = path.replace("\\", "/")
+    
+    if path.lower().endswith(".pdf"):
+        resource_type = "auto"
+
     result = cloudinary.uploader.upload(
         content,
         public_id=public_id,
         resource_type=resource_type,
+        upload_preset="ml_default",
         overwrite=True,
         use_filename=False,
     )
