@@ -133,7 +133,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                       TextSpan(
                         text: 'Edu',
-                        style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: const Color(0xFFF76707)),
+                        style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary.withValues(alpha: 0.3),),
                       ),
                     ],
                   ),

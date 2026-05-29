@@ -24,8 +24,8 @@ class BFEducation {
 
   static const examTypes = {
     'primaire': ['CEP', 'Examen Blanc', 'Devoir'],
-    'college': ['BEPC', 'Examen Blanc', 'Devoir', 'Test entrée 6ème'],
-    'lycee': ['BAC A', 'BAC D', 'BAC C', 'BAC H', 'BAC E', 'Examen Blanc', 'Devoir'],
+    'college': ['BEPC','Test entrée 6ème'],
+    'lycee': ['BAC A', 'BAC D', 'BAC C', 'BAC H', 'BAC E', ],
     'universite': ['Partiel', 'Examen Final', 'Rattrapage'],
     'concours': [
       'ENAREF', 'ENAM', 'Police Nationale', 'Gendarmerie',
