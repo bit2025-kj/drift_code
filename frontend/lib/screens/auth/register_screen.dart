@@ -55,13 +55,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     if (mounted) {
       setState(() => _isLoading = false);
-      if (!success) {
+      if (success) {
+        // Pop RegisterScreen (and LoginScreen below it) so _AuthGate can
+        // swap in MainShell cleanly without stale routes on the stack.
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
         final error = ref.read(authProvider).error;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error ?? "Erreur d'inscription"), backgroundColor: AppColors.error),
         );
       }
-      // Routing handled by _AuthGate watching authProvider
     }
   }
 

@@ -150,9 +150,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
-    if (confirm == true) {
-      await ref.read(authProvider.notifier).logout();
-    }
+    // Guard: widget can be disposed while the dialog was open
+    if (confirm != true || !mounted) return;
+    await ref.read(authProvider.notifier).logout();
+    // Stack cleanup is handled by _AuthGate's ref.listen — no manual pop needed.
   }
 
   @override

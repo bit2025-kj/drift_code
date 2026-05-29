@@ -46,7 +46,10 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Déconnexion',
-            onPressed: () => ref.read(authProvider.notifier).logout(),
+            onPressed: () async {
+              await ref.read(authProvider.notifier).logout();
+              // Stack cleanup handled by _AuthGate's ref.listen.
+            },
           ),
         ],
       ),

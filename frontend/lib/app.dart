@@ -25,6 +25,16 @@ class _AuthGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Vide la stack Navigator dès que la session expire ou que logout() est appelé,
+    // peu importe depuis quel écran (Settings, Admin, expiration token…).
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (previous?.status != AuthStatus.unauthenticated &&
+          next.status == AuthStatus.unauthenticated) {
+        Navigator.of(context, rootNavigator: true)
+            .popUntil((route) => route.isFirst);
+      }
+    });
+
     final auth = ref.watch(authProvider);
     switch (auth.status) {
       case AuthStatus.loading:

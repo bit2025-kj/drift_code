@@ -13,8 +13,15 @@ class AuthState {
 
   const AuthState({required this.status, this.user, this.error});
 
-  AuthState copyWith({AuthStatus? status, UserModel? user, String? error}) =>
-      AuthState(status: status ?? this.status, user: user ?? this.user, error: error);
+  // Use a sentinel so callers can explicitly pass null to clear the error,
+  // while omitting the parameter preserves the current error value.
+  static const _keep = Object();
+  AuthState copyWith({AuthStatus? status, UserModel? user, Object? error = _keep}) =>
+      AuthState(
+        status: status ?? this.status,
+        user: user ?? this.user,
+        error: identical(error, _keep) ? this.error : error as String?,
+      );
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
