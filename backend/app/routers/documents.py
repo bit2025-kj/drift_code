@@ -11,7 +11,7 @@ from app.utils.auth import get_current_user
 from app.utils.notify import push_notif
 from app.utils.storage import upload_file as storage_upload
 from app.config import settings
-import asyncio, uuid, os
+import asyncio, uuid, os, io as _io
 
 
 _CORRIGE_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
@@ -344,6 +344,117 @@ async def upload_document(
         thumbnail_url=thumbnail_url,
     )
     db.add(doc)
+    await db.commit()
+
+    result = await db.execute(
+        select(Document)
+        .options(
+            selectinload(Document.level), selectinload(Document.classe),
+            selectinload(Document.matiere), selectinload(Document.type_examen),
+        )
+        .where(Document.id == doc.id)
+    )
+    return _enrich(result.scalar_one())
+
+
+# ── Upload multi-pages (images → PDF) ────────────────────────────────────────
+
+def _merge_images_to_pdf_sync(images_bytes: list[bytes]) -> bytes:
+    """Merge a list of image byte buffers into a single multi-page PDF using Pillow."""
+    from PIL import Image
+    imgs = []
+    for b in images_bytes:
+        img = Image.open(_io.BytesIO(b))
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        imgs.append(img)
+    buf = _io.BytesIO()
+    imgs[0].save(buf, format="PDF", save_all=True, append_images=imgs[1:], resolution=150.0)
+    return buf.getvalue()
+
+
+@router.post("/upload-pages", response_model=DocumentOut, status_code=201)
+async def upload_multi_page_document(
+    title: str = Form(...),
+    description: str = Form(None),
+    level_id: int = Form(...),
+    classe_id: int = Form(None),
+    matiere_id: int = Form(None),
+    type_examen_id: int = Form(None),
+    annee: int = Form(None),
+    session: str = Form(None),
+    is_official: bool = Form(False),
+    pages: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not pages:
+        raise HTTPException(status_code=400, detail="Au moins une image est requise")
+    if len(pages) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 pages par document")
+
+    images_bytes = [await p.read() for p in pages]
+
+    try:
+        pdf_bytes = await asyncio.to_thread(_merge_images_to_pdf_sync, images_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Impossible de fusionner les images : {e}")
+
+    doc_id = str(uuid.uuid4())
+    file_url = await storage_upload(pdf_bytes, f"documents/{doc_id}.pdf")
+
+    # Generate thumbnail from merged PDF
+    thumbnail_url = None
+    try:
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(pdf_bytes)
+            tmp_path = tmp.name
+        thumb_out = tmp_path + "_thumb.jpg"
+
+        def _gen():
+            _generate_thumbnail_sync(tmp_path, thumb_out)
+            if os.path.exists(thumb_out):
+                with open(thumb_out, "rb") as f:
+                    return f.read()
+            return None
+
+        thumb_bytes = await asyncio.to_thread(_gen)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        if thumb_bytes:
+            thumbnail_url = await storage_upload(
+                thumb_bytes, f"thumbnails/{doc_id}.jpg", resource_type="image"
+            )
+            try:
+                os.unlink(thumb_out)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+    doc = Document(
+        id=doc_id,
+        title=title,
+        description=description,
+        level_id=level_id,
+        classe_id=classe_id,
+        matiere_id=matiere_id,
+        type_examen_id=type_examen_id,
+        annee=annee,
+        session=session,
+        is_official=is_official,
+        file_url=file_url,
+        has_corrige=False,
+        file_size_kb=len(pdf_bytes) // 1024,
+        uploaded_by=current_user.id,
+        is_approved=True,
+        thumbnail_url=thumbnail_url,
+    )
+    db.add(doc)
+    current_user.points += 20
     await db.commit()
 
     result = await db.execute(

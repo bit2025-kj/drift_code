@@ -33,6 +33,7 @@ class ApiEndpoints {
   static const documents = '/documents';
   static const trending = '/documents/trending';
   static const uploadDocument = '/documents/upload';
+  static const uploadMultiPageDocument = '/documents/upload-pages';
   static String document(String id) => '/documents/$id';
   static String downloadDocument(String id) => '/documents/$id/download';
   static String favoriteDocument(String id) => '/documents/$id/favorite';
