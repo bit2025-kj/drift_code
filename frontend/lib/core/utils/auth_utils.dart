@@ -11,7 +11,31 @@ Future<bool> requireAuth(BuildContext context, WidgetRef ref) async {
   if (auth.status == AuthStatus.authenticated) {
     return true;
   }
-  
+  // Show confirmation dialog
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Connexion requise'),
+      content: const Text('Veuillez créer un compte ou vous connecter pour continuer.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Annuler'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Se connecter'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm != true) {
+    return false;
+  }
+
+  if (!context.mounted) return false;
+
   // Navigate to login screen
   final result = await Navigator.push(
     context,
