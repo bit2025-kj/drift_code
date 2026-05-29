@@ -9,6 +9,7 @@ import 'package:nafa_edu/providers/document_provider.dart';
 import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:nafa_edu/providers/education_provider.dart';
 import 'package:nafa_edu/screens/banque/document_detail_screen.dart';
+import 'package:nafa_edu/screens/banque/document_reader_screen.dart';
 import 'package:nafa_edu/screens/main_shell.dart';
 import 'package:nafa_edu/screens/home/publish_sheet.dart';
 import 'package:nafa_edu/providers/notification_provider.dart';
@@ -384,7 +385,7 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
               ? {'label': 'OFFICIEL', 'color': const Color(0xFF2F9E44), 'bg': const Color(0xFFD3F9D8)}
               : badges[i % badges.length];
           return GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentDetailScreen(document: doc))),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentReaderScreen(document: doc))),
             child: Container(
               width: 155,
               decoration: BoxDecoration(
@@ -426,17 +427,23 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
                         style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF1A1D23), height: 1.3)),
                   ),
                   const SizedBox(height: 5),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.favorite_rounded, size: 12, color: Color(0xFFE03131)),
-                        Text(' ${doc.likesCount}',
-                            style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF495057))),
-                        const SizedBox(width: 4),
-                        Text('• ${_formatCount(doc.downloadsCount)} téléch.',
-                            style: GoogleFonts.inter(fontSize: 10, color: const Color(0xFFADB5BD))),
-                      ],
+                  GestureDetector(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentDetailScreen(document: doc))),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.favorite_rounded, size: 12, color: Color(0xFFE03131)),
+                          Text(' ${doc.likesCount}',
+                              style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF495057))),
+                          const SizedBox(width: 4),
+                          Text('• ${_formatCount(doc.downloadsCount)} téléch.',
+                              style: GoogleFonts.inter(fontSize: 10, color: const Color(0xFFADB5BD))),
+                          const Spacer(),
+                          const Icon(Icons.info_outline_rounded, size: 12, color: Color(0xFFADB5BD)),
+                        ],
+                      ),
                     ),
                   ),
                   if (doc.hasCorrige)
@@ -593,7 +600,7 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
           final doc = docs[i];
           final color = pdfColors[i % pdfColors.length];
           return GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentDetailScreen(document: doc))),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentReaderScreen(document: doc))),
             child: Container(
               width: 140,
               decoration: BoxDecoration(
@@ -616,7 +623,14 @@ Widget _buildSearchRow(BuildContext context, WidgetRef ref) {
                           child: Text('NOUVEAU',
                               style: GoogleFonts.inter(fontSize: 8, fontWeight: FontWeight.w700, color: AppColors.primary)),
                         ),
-                        const Icon(Icons.more_vert, size: 14, color: Color(0xFFADB5BD)),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentDetailScreen(document: doc))),
+                          behavior: HitTestBehavior.opaque,
+                          child: const Padding(
+                            padding: EdgeInsets.all(2),
+                            child: Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFFADB5BD)),
+                          ),
+                        ),
                       ],
                     ),
                   ),
