@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, UploadFile, File, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from app.database import get_db
@@ -411,14 +411,45 @@ async def delete_document_owner(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Document).where(Document.id == document_id))
+    result = await db.execute(
+        select(Document).where(Document.id == document_id)
+    )
+
     doc = result.scalar_one_or_none()
+
     if not doc:
         raise HTTPException(status_code=404, detail="Document introuvable")
+
     ensure_owner(current_user.id, doc.uploaded_by)
+
+    # Supprimer les dépendances AVANT le document
+    await db.execute(
+        delete(Download).where(Download.document_id == document_id)
+    )
+
+    await db.execute(
+        delete(DocumentLike).where(
+            DocumentLike.document_id == document_id
+        )
+    )
+
+    await db.execute(
+        delete(Favorite).where(
+            Favorite.document_id == document_id
+        )
+    )
+
+    await db.execute(
+        delete(Report).where(
+            Report.content_type == "document",
+            Report.content_id == document_id,
+        )
+    )
+
+    # Puis supprimer le document
     await db.delete(doc)
+
     await db.commit()
-    return
 
 
 # ── Upload multi-pages (images → PDF) ────────────────────────────────────────
