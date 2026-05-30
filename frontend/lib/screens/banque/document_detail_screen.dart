@@ -348,7 +348,7 @@ class _DocumentDetailScreenState extends ConsumerState<DocumentDetailScreen> {
                     if (doc.levelName != null) _WhiteChip(doc.levelName!),
                     if (doc.classeName != null) _WhiteChip(doc.classeName!),
                     if (doc.annee != null) _WhiteChip('${doc.annee}'),
-                    if (doc.isOfficial) _WhiteChip('OFFICIEL'),
+                    if (doc.isOfficial) const _WhiteChip('OFFICIEL'),
                     if (doc.hasCorrige)
                       const _WhiteChip('CORRIGÉ DISPONIBLE'),
                   ],
@@ -698,25 +698,27 @@ class _DocumentTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onDownload,
-                  icon: isDownloading
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.download_outlined, size: 16),
-                  label: const Text('Télécharger',
-                      style: TextStyle(fontSize: 13)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    side: BorderSide(color: iconColor.withValues(alpha: 0.5)),
-                    foregroundColor: iconColor,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ),
+  child: OutlinedButton.icon(
+    onPressed: onDownload,
+    icon: isDownloading
+        ? const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2))
+        : const Icon(Icons.download_outlined, size: 16),
+    label: const Text('Télécharger', style: TextStyle(fontSize: 13)),
+    style: OutlinedButton.styleFrom(
+      backgroundColor: Colors.transparent, // ✅ enlève fond
+      shadowColor: Colors.transparent,     // ✅ enlève ombre
+      elevation: 0,                        // ✅ sécurité anti-shadow
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      side: BorderSide(color: iconColor.withValues(alpha: 0.5)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+    ),
+  ),
+),
             ],
           ),
         ],

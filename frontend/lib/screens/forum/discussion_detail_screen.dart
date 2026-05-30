@@ -1123,7 +1123,7 @@ class _CommentInputBar extends StatelessWidget {
           children: [
             if (replyToName != null)
               Container(
-                color: AppColors.primary.withOpacity(0.06),
+                color: AppColors.primary.withValues(alpha: 0.06),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: Row(

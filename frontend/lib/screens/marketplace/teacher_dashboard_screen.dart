@@ -7,6 +7,8 @@ import 'package:nafa_edu/models/marketplace_model.dart';
 import 'package:nafa_edu/providers/marketplace_provider.dart';
 import 'package:nafa_edu/screens/marketplace/create_product_screen.dart';
 import 'package:nafa_edu/screens/marketplace/product_detail_screen.dart';
+import 'package:nafa_edu/core/api/api_client.dart';
+import 'package:nafa_edu/core/api/api_endpoints.dart';
 
 class TeacherDashboardScreen extends ConsumerWidget {
   const TeacherDashboardScreen({super.key});
@@ -112,6 +114,7 @@ class TeacherDashboardScreen extends ConsumerWidget {
                                   builder: (_) =>
                                       ProductDetailScreen(product: p)),
                             ),
+                            onEdit: () => _editProduct(context, ref, p),
                             onDelete: () async {
                               final confirm = await showDialog<bool>(
                                 context: context,
@@ -137,6 +140,7 @@ class TeacherDashboardScreen extends ConsumerWidget {
                                     .read(marketplaceProvider.notifier)
                                     .deleteMyProduct(p.id);
                                 ref.invalidate(myProductsProvider);
+                                ref.invalidate(marketplaceProvider);
                               }
                             },
                           ))
@@ -180,6 +184,79 @@ class TeacherDashboardScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _editProduct(BuildContext context, WidgetRef ref, ProductModel prod) async {
+    final titleCtrl = TextEditingController(text: prod.title);
+    final descCtrl = TextEditingController(text: prod.description);
+    final priceCtrl = TextEditingController(text: '${prod.price}');
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20, right: 20, top: 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Modifier le produit',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: titleCtrl,
+            decoration: const InputDecoration(labelText: 'Titre'),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: descCtrl,
+            decoration: const InputDecoration(labelText: 'Description'),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: priceCtrl,
+            decoration: const InputDecoration(labelText: 'Prix (FCFA)'),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler'))),
+            const SizedBox(width: 12),
+            Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer'))),
+          ]),
+          const SizedBox(height: 16),
+        ]),
+      ),
+    );
+    if (confirmed != true) {
+      titleCtrl.dispose();
+      descCtrl.dispose();
+      priceCtrl.dispose();
+      return;
+    }
+    try {
+      await ApiClient.instance.dio.patch(
+        ApiEndpoints.myProduct(prod.id),
+        data: {
+          'title': titleCtrl.text.trim(),
+          'description': descCtrl.text.trim(),
+          'price': int.tryParse(priceCtrl.text.trim()) ?? prod.price,
+        },
+      );
+      ref.invalidate(myProductsProvider);
+      ref.invalidate(marketplaceProvider);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erreur lors de la modification')));
+      }
+    } finally {
+      titleCtrl.dispose();
+      descCtrl.dispose();
+      priceCtrl.dispose();
+    }
+  }
 }
 
 // ── Stats row ─────────────────────────────────────────────────────────────────
@@ -199,7 +276,7 @@ class _StatsRow extends StatelessWidget {
           color: AppColors.primary,
         ),
         const SizedBox(width: 12),
-        _StatCard(
+        const _StatCard(
           icon: Icons.star_outline,
           label: 'Statut',
           value: 'Enseignant',
@@ -256,11 +333,13 @@ class _StatCard extends StatelessWidget {
 class _MyProductTile extends StatelessWidget {
   final ProductModel product;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _MyProductTile({
     required this.product,
     required this.onTap,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -324,6 +403,11 @@ class _MyProductTile extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined,
+                  size: 20, color: AppColors.primary),
+              onPressed: onEdit,
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline,

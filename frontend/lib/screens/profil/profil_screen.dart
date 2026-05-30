@@ -525,7 +525,7 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
     final items = [
       {'icon': Icons.quiz_outlined, 'label': 'Quiz réalisés', 'value': quizTotal, 'color': AppColors.primary},
       {'icon': Icons.check_circle_outline, 'label': 'Téléchargements', 'value': downloads, 'color': AppColors.success},
-      {'icon': Icons.timer_outlined, 'label': 'Heures de révision', 'value': revH, 'color': AppColors.accent},
+      {'icon': Icons.timer_outlined, 'label': 'Heures de révision', 'value': revH, 'color': AppColors.lycee},
       {'icon': Icons.trending_up, 'label': 'Score moyen', 'value': avgScore, 'color': AppColors.warning},
     ];
 
@@ -602,7 +602,7 @@ class _ProfilScreenState extends ConsumerState<ProfilScreen> {
                   ),
                 );
               }
-              final colors = [AppColors.primary, AppColors.accent, AppColors.success, AppColors.lycee, AppColors.universite];
+              final colors = [AppColors.primary, AppColors.primary, AppColors.success, AppColors.lycee, AppColors.universite];
               final subjects = s.subjectProgress.take(5).toList().asMap().entries.map((e) => {
                 'name': (e.value['matiere_name'] as String?) ?? 'Matière',
                 'progress': ((e.value['completion'] as num?)?.toDouble() ?? 0.0) / 100,

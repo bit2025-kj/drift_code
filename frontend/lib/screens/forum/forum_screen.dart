@@ -10,6 +10,9 @@ import 'package:nafa_edu/screens/forum/forum_widgets.dart';
 import 'package:nafa_edu/services/sync_service.dart';
 import 'package:nafa_edu/widgets/network_error_widget.dart';
 import 'package:nafa_edu/core/utils/auth_utils.dart';
+import 'package:nafa_edu/core/api/api_client.dart';
+import 'package:nafa_edu/core/api/api_endpoints.dart';
+import 'package:nafa_edu/widgets/report_dialog.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const _kFeedBg = Color(0xFFF0F2F5);
@@ -259,7 +262,7 @@ class _QuickAction extends StatelessWidget {
 
 // ── Post Card ─────────────────────────────────────────────────────────────────
 
-class _PostCard extends StatefulWidget {
+class _PostCard extends ConsumerStatefulWidget {
   final DiscussionModel discussion;
   final bool isLiked;
   final VoidCallback onLike;
@@ -275,10 +278,10 @@ class _PostCard extends StatefulWidget {
   });
 
   @override
-  State<_PostCard> createState() => _PostCardState();
+  ConsumerState<_PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<_PostCard>
+class _PostCardState extends ConsumerState<_PostCard>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
   late AnimationController _likeController;
@@ -314,6 +317,93 @@ class _PostCardState extends State<_PostCard>
     if (diff.inHours < 24) return 'Il y a ${diff.inHours}h';
     if (diff.inDays < 7) return 'Il y a ${diff.inDays}j';
     return '${dt.day}/${dt.month}/${dt.year}';
+  }
+
+  Future<void> _editDiscussion(DiscussionModel d) async {
+    final titleCtrl = TextEditingController(text: d.title);
+    final contentCtrl = TextEditingController(text: d.content);
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20, right: 20, top: 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Modifier la publication',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: titleCtrl,
+            decoration: const InputDecoration(labelText: 'Titre'),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: contentCtrl,
+            decoration: const InputDecoration(labelText: 'Contenu'),
+            maxLines: 5,
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler'))),
+            const SizedBox(width: 12),
+            Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer'))),
+          ]),
+          const SizedBox(height: 16),
+        ]),
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      titleCtrl.dispose();
+      contentCtrl.dispose();
+      return;
+    }
+    try {
+      await ApiClient.instance.dio.patch(
+        ApiEndpoints.updateDiscussion(d.id),
+        data: {'title': titleCtrl.text.trim(), 'content': contentCtrl.text.trim()},
+      );
+      ref.invalidate(discussionProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erreur lors de la modification')));
+      }
+    } finally {
+      titleCtrl.dispose();
+      contentCtrl.dispose();
+    }
+  }
+
+  Future<void> _deleteDiscussion(DiscussionModel d) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer cette publication ?'),
+        content: const Text('Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiClient.instance.dio.delete(ApiEndpoints.discussion(d.id));
+      ref.invalidate(discussionProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erreur lors de la suppression')));
+      }
+    }
   }
 
   @override
@@ -361,10 +451,53 @@ class _PostCardState extends State<_PostCard>
                 ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_horiz, color: kActionGray),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'report', child: Text('Signaler')),
-                    PopupMenuItem(value: 'copy', child: Text('Copier le lien')),
-                  ],
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _editDiscussion(d);
+                    } else if (value == 'delete') {
+                      _deleteDiscussion(d);
+                    } else if (value == 'report') {
+                      showReportDialog(context,
+                          contentType: 'discussion',
+                          contentId: d.id);
+                    }
+                  },
+                  itemBuilder: (_) {
+                    final currentUserId = ref.watch(authProvider).user?.id;
+                    final isOwner = currentUserId != null && d.author.id == currentUserId;
+                    return [
+                      if (isOwner) ...[
+                        const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(children: [
+                              Icon(Icons.edit_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('Modifier')
+                            ])),
+                        const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(children: [
+                              Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                              SizedBox(width: 8),
+                              Text('Supprimer', style: TextStyle(color: AppColors.error))
+                            ])),
+                      ],
+                      const PopupMenuItem(
+                          value: 'report',
+                          child: Row(children: [
+                            Icon(Icons.flag_outlined, size: 18, color: AppColors.error),
+                            SizedBox(width: 8),
+                            Text('Signaler')
+                          ])),
+                      const PopupMenuItem(
+                          value: 'copy',
+                          child: Row(children: [
+                            Icon(Icons.copy_outlined, size: 18),
+                            SizedBox(width: 8),
+                            Text('Copier le lien')
+                          ])),
+                    ];
+                  },
                 ),
               ],
             ),

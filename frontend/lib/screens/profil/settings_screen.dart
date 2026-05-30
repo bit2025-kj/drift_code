@@ -126,8 +126,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _extractError(dynamic e) {
     try {
       final data = (e as dynamic).response?.data;
-      if (data is Map && data['detail'] != null)
+      if (data is Map && data['detail'] != null) {
         return data['detail'].toString();
+      }
     } catch (_) {}
     return 'Une erreur est survenue';
   }
@@ -189,7 +190,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   data: (levels) => Column(
                     children: [
                       DropdownButtonFormField<int>(
-                        value: _selectedLevelId,
+                        initialValue: _selectedLevelId,
                         decoration: const InputDecoration(
                           labelText: 'Niveau scolaire',
                           prefixIcon: Icon(Icons.school_outlined),
@@ -206,7 +207,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (_selectedLevelId != null) ...[
                         const SizedBox(height: 12),
                         DropdownButtonFormField<int>(
-                          value: _selectedClasseId,
+                          initialValue: _selectedClasseId,
                           decoration: const InputDecoration(
                             labelText: 'Classe',
                             prefixIcon: Icon(Icons.class_outlined),

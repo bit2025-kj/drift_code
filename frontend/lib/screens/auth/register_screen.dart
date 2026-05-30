@@ -141,7 +141,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
               const SizedBox(height: 20),
               DropdownButtonFormField<String>(
-                value: _selectedVille,
+                initialValue: _selectedVille,
                 hint: const Text('Ta ville (optionnel)'),
                 decoration: const InputDecoration(prefixIcon: Icon(Icons.location_on_outlined), labelText: 'Ville'),
                 items: BFEducation.villes.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),

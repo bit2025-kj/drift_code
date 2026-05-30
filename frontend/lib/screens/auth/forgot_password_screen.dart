@@ -99,8 +99,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String _extractError(dynamic e) {
     try {
       final data = (e as dynamic).response?.data;
-      if (data is Map && data['detail'] != null)
+      if (data is Map && data['detail'] != null) {
         return data['detail'].toString();
+      }
     } catch (_) {}
     return 'Une erreur est survenue';
   }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nafa_edu/config/theme.dart';
 import 'package:nafa_edu/providers/auth_provider.dart';
-import 'package:nafa_edu/screens/auth/login_screen.dart';
 import 'package:nafa_edu/screens/main_shell.dart';
 import 'package:nafa_edu/screens/admin/admin_shell.dart';
 

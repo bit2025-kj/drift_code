@@ -635,7 +635,7 @@ class _ResultScreen extends StatelessWidget {
             Row(children: [
               _StatTile(
                 icon: Icons.star_rounded,
-                color: AppColors.accent,
+                color: AppColors.primary,
                 value: '+${result.pointsEarned}',
                 label: 'Points XP',
               ),

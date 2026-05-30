@@ -21,8 +21,9 @@ import 'package:nafa_edu/widgets/network_error_widget.dart';
 import 'package:nafa_edu/screens/home/publish_sheet.dart';
 import 'package:nafa_edu/providers/notification_provider.dart';
 import 'package:nafa_edu/screens/notifications/notification_screen.dart';
-import 'package:nafa_edu/screens/notifications/notification_screen.dart';
 import 'package:nafa_edu/core/utils/auth_utils.dart';
+import 'package:nafa_edu/widgets/report_dialog.dart';
+import 'package:nafa_edu/providers/auth_provider.dart';
 import 'package:shimmer/shimmer.dart';
 
 class BanqueScreen extends ConsumerStatefulWidget {
@@ -226,7 +227,6 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE9ECEF)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: TextField(
           controller: _searchController,
@@ -274,13 +274,6 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF7048E8).withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -319,13 +312,6 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -625,7 +611,6 @@ class _BanqueScreenState extends ConsumerState<BanqueScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE9ECEF)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -939,6 +924,115 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
     return '$n';
   }
 
+  Future<void> _editDocument() async {
+    final doc = widget.doc;
+    final titleCtrl = TextEditingController(text: doc.title);
+    final descCtrl = TextEditingController(text: doc.description ?? '');
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20, right: 20, top: 20),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Modifier le document',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: titleCtrl,
+            decoration: const InputDecoration(labelText: 'Titre'),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: descCtrl,
+            decoration:
+                const InputDecoration(labelText: 'Description (optionnel)'),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Annuler'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Enregistrer'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 16),
+        ]),
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      titleCtrl.dispose();
+      descCtrl.dispose();
+      return;
+    }
+    try {
+      await ApiClient.instance.dio.patch(
+        ApiEndpoints.updateDocument(doc.id),
+        data: {
+          'title': titleCtrl.text.trim(),
+          'description': descCtrl.text.trim().isEmpty
+              ? null
+              : descCtrl.text.trim(),
+        },
+      );
+      ref.invalidate(documentProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erreur lors de la modification')));
+      }
+    } finally {
+      titleCtrl.dispose();
+      descCtrl.dispose();
+    }
+  }
+
+  Future<void> _deleteDocument() async {
+    final doc = widget.doc;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer ce document ?'),
+        content: const Text(
+            'Cette action est irréversible. Le document sera supprimé pour tout le monde.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiClient.instance.dio
+          .delete(ApiEndpoints.deleteDocument(doc.id));
+      ref.invalidate(documentProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erreur lors de la suppression')));
+      }
+    }
+  }
+
   // ── Preview (top half) ────────────────────────────────────────────────────────
 
   Widget _buildPreview(DocumentModel doc) {
@@ -967,11 +1061,11 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
         Positioned(
           left: 0, right: 0, bottom: 0, height: 48,
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
-                colors: [Colors.black.withValues(alpha: 0.55), Colors.transparent],
+                colors: [Colors.transparent, Colors.transparent],
               ),
             ),
           ),
@@ -1188,7 +1282,6 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFE9ECEF)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1258,15 +1351,65 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => DocumentDetailScreen(document: doc)),
-                        ),
-                        child: const Padding(
-                          padding: EdgeInsets.only(left: 6, top: 1),
-                          child: Icon(Icons.more_vert_rounded, size: 20, color: Color(0xFFADB5BD)),
-                        ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert_rounded, size: 20, color: Color(0xFFADB5BD)),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onSelected: (value) {
+                          if (value == 'details') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => DocumentDetailScreen(document: doc)),
+                            );
+                          } else if (value == 'edit') {
+                            _editDocument();
+                          } else if (value == 'delete') {
+                            _deleteDocument();
+                          } else if (value == 'report') {
+                            showReportDialog(context, contentType: 'document', contentId: doc.id);
+                          }
+                        },
+                        itemBuilder: (_) {
+                          final currentUserId = ref.watch(authProvider).user?.id;
+                          final isOwner = currentUserId != null && doc.uploadedBy == currentUserId;
+                          return [
+                            const PopupMenuItem(
+                              value: 'details',
+                              child: Row(children: [
+                                Icon(Icons.info_outline, size: 18),
+                                SizedBox(width: 8),
+                                Text('Détails')
+                              ]),
+                            ),
+                            if (isOwner) ...[
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(children: [
+                                  Icon(Icons.edit_outlined, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Modifier')
+                                ]),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(children: [
+                                  Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+                                  SizedBox(width: 8),
+                                  Text('Supprimer', style: TextStyle(color: AppColors.error))
+                                ]),
+                              ),
+                            ],
+                            if (!isOwner)
+                              const PopupMenuItem(
+                                value: 'report',
+                                child: Row(children: [
+                                  Icon(Icons.flag_outlined, size: 18, color: AppColors.error),
+                                  SizedBox(width: 8),
+                                  Text('Signaler')
+                                ]),
+                              ),
+                          ];
+                        },
                       ),
                     ],
                   ),
@@ -1328,30 +1471,31 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
                       ),
                       // Download button
                       GestureDetector(
-                        onTap: _isDownloading ? null : _download,
-                        child: _isDownloading
-                            ? const SizedBox(
-                                width: 18, height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                              )
-                            : Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.download_rounded, size: 12, color: AppColors.primary),
-                                    const SizedBox(width: 4),
-                                    Text('Télécharger',
-                                        style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                                  ],
-                                ),
-                              ),
-                      ),
+  onTap: _isDownloading ? null : _download,
+  child: _isDownloading
+      ? const SizedBox(
+          width: 18, height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+        )
+      : Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.download_rounded, size: 12, color: AppColors.primary),
+              const SizedBox(width: 4),
+              Text('Télécharger',
+                  style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary)),
+            ],
+          ),
+        ),
+),
+                      
                     ],
                   ),
                 ],

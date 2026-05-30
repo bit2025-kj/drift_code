@@ -50,6 +50,15 @@ def decode_token(token: str, expected_type: str = "access") -> str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expiré ou invalide")
 
 
+def is_owner(user_id: str | None, owner_id: str | None) -> bool:
+    return bool(user_id and owner_id and user_id == owner_id)
+
+
+def ensure_owner(user_id: str | None, owner_id: str | None, message: str = "Action non autorisée") -> None:
+    if not is_owner(user_id, owner_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message)
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),

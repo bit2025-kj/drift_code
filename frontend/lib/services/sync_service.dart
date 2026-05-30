@@ -35,7 +35,7 @@ class SyncService {
 
   /// Synchroniser toutes les opérations en attente
   Future<SyncResult> syncAll() async {
-    if (!isOnline) return SyncResult(synced: 0, failed: 0, message: 'Pas de connexion');
+    if (!isOnline) return const SyncResult(synced: 0, failed: 0, message: 'Pas de connexion');
 
     int synced = 0;
     int failed = 0;

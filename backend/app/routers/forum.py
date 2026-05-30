@@ -14,7 +14,7 @@ from app.schemas.forum import (
     ForumStats, AuthorOut, CommentOut,
 )
 from app.schemas.admin import ReportCreate
-from app.utils.auth import get_current_user, get_optional_user
+from app.utils.auth import ensure_owner, get_current_user, get_optional_user
 from app.utils.notify import push_notif
 from app.utils.storage import upload_file as storage_upload
 
@@ -364,8 +364,7 @@ async def delete_discussion(
     disc = result.scalar_one_or_none()
     if not disc:
         raise HTTPException(status_code=404, detail="Discussion introuvable")
-    if disc.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Action non autorisée")
+    ensure_owner(current_user.id, disc.user_id)
     disc.is_active = False
     await db.commit()
     return
@@ -390,8 +389,7 @@ async def update_discussion(
     )).scalar_one_or_none()
     if not disc:
         raise HTTPException(status_code=404, detail="Discussion introuvable")
-    if disc.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Action non autorisée")
+    ensure_owner(current_user.id, disc.user_id)
     if data.title is not None:
         disc.title = data.title
     if data.content is not None:
@@ -422,8 +420,7 @@ async def update_comment(
     )).scalar_one_or_none()
     if not comment:
         raise HTTPException(status_code=404, detail="Commentaire introuvable")
-    if comment.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Action non autorisée")
+    ensure_owner(current_user.id, comment.user_id)
     comment.content = data.content
     await db.commit()
     return {"message": "Commentaire modifié"}
@@ -444,8 +441,7 @@ async def delete_comment(
     )).scalar_one_or_none()
     if not comment:
         raise HTTPException(status_code=404, detail="Commentaire introuvable")
-    if comment.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Action non autorisée")
+    ensure_owner(current_user.id, comment.user_id)
     comment.is_active = False
     disc = (await db.execute(
         select(Discussion).where(Discussion.id == discussion_id)

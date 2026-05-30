@@ -2,6 +2,7 @@ import os
 import sys
 # Add backend directory to path so we can import app modules
 sys.path.append(r"c:\Users\Ce pc\Desktop\drift_code\backend")
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 # Set mock environment variable before imports if necessary
@@ -39,6 +40,22 @@ def test_token_differentiation():
         assert False, "Refresh token accepted as access token!"
     except Exception as e:
         print(f"✅ Refresh token rejected as access token (as expected): {e.detail}")
+
+
+def test_is_owner_helper():
+    from app.utils.auth import is_owner, ensure_owner
+
+    assert is_owner("user-1", "user-1") is True
+    assert is_owner("user-1", "user-2") is False
+
+    try:
+        ensure_owner("user-1", "user-2")
+        assert False, "ensure_owner should raise HTTPException for non-owners"
+    except HTTPException as e:
+        assert e.status_code == 403
+        assert e.detail == "Action non autorisée"
+
+
 def test_forgot_password_demo_code():
     print("\nTesting forgot-password demo_code settings...")
     

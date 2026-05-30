@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models import Document, DocumentLike, Favorite, Download, EducationLevel, Classe, Matiere, TypeExamen, User, Report
 from app.schemas.document import DocumentOut, DocumentListResponse, FavoriteToggleResponse
 from app.schemas.admin import ReportCreate
-from app.utils.auth import get_current_user
+from app.utils.auth import ensure_owner, get_current_user
 from app.utils.notify import push_notif
 from app.utils.storage import (
     local_path_from_url,
@@ -395,8 +395,7 @@ async def update_document(
     doc = result.scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=404, detail="Document introuvable")
-    if doc.uploaded_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Action non autorisée")
+    ensure_owner(current_user.id, doc.uploaded_by)
     if data.title is not None:
         doc.title = data.title
     if data.description is not None:
@@ -416,8 +415,7 @@ async def delete_document_owner(
     doc = result.scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=404, detail="Document introuvable")
-    if doc.uploaded_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Action non autorisée")
+    ensure_owner(current_user.id, doc.uploaded_by)
     await db.delete(doc)
     await db.commit()
     return

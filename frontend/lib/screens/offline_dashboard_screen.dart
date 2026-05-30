@@ -497,7 +497,7 @@ class _OfflineDashboardScreenState extends ConsumerState<OfflineDashboardScreen>
                     'Supprimer ?',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w700),
                   ),
-                  content: Text('Voulez-vous supprimer ce sujet de votre appareil ?'),
+                  content: const Text('Voulez-vous supprimer ce sujet de votre appareil ?'),
                   actions: [
                     TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
                     ElevatedButton(

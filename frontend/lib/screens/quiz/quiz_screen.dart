@@ -121,7 +121,7 @@ class QuizScreen extends ConsumerWidget {
           statsAsync.when(
             loading: () => const SizedBox(
                 height: 80, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-            error: (_, __) => _StatsGrid(quiz: '—', score: '—', streak: '—', rank: '—'),
+            error: (_, __) => const _StatsGrid(quiz: '—', score: '—', streak: '—', rank: '—'),
             data: (s) => _StatsGrid(
               quiz: '${s.totalSessions}',
               score: '${s.avgScore.toStringAsFixed(0)}%',
@@ -164,7 +164,7 @@ class QuizScreen extends ConsumerWidget {
                 ),
                 child: Column(
                   children: [
-                    Icon(Icons.play_circle_outline_rounded,
+                    const Icon(Icons.play_circle_outline_rounded,
                         size: 36, color: AppColors.textHint),
                     const SizedBox(height: 8),
                     Text('Aucun quiz en cours',
@@ -187,7 +187,7 @@ class QuizScreen extends ConsumerWidget {
                 itemCount: inProgress.length,
                 itemBuilder: (_, i) {
                   final s = inProgress[i];
-                  final colors = [AppColors.primary, AppColors.success, AppColors.accent, AppColors.warning];
+                  final colors = [AppColors.primary, AppColors.success, AppColors.lycee, AppColors.warning];
                   return _InProgressCard(session: s, color: colors[i % colors.length]);
                 },
               ),
@@ -245,7 +245,7 @@ class QuizScreen extends ConsumerWidget {
                 ),
                 child: Column(
                   children: [
-                    Icon(Icons.history_rounded, size: 36, color: AppColors.textHint),
+                    const Icon(Icons.history_rounded, size: 36, color: AppColors.textHint),
                     const SizedBox(height: 8),
                     Text('Aucun quiz terminé',
                         style: GoogleFonts.inter(
@@ -309,7 +309,7 @@ class _StatsGrid extends StatelessWidget {
       Row(children: [
         _StatBox(
             value: '$streak 🔥', label: 'Série actuelle',
-            icon: Icons.local_fire_department, color: AppColors.accent),
+            icon: Icons.local_fire_department, color: AppColors.primary),
         const SizedBox(width: 10),
         _StatBox(
             value: rank, label: 'Classement', icon: Icons.emoji_events,
@@ -722,7 +722,7 @@ class _GenerateQuizSheetState extends ConsumerState<_GenerateQuizSheet> {
                       loading: () => const LinearProgressIndicator(),
                       error: (_, __) => const Text('Erreur de chargement'),
                       data: (matieres) => DropdownButtonFormField<int?>(
-                        value: _selectedMatiereId,
+                        initialValue: _selectedMatiereId,
                         hint: Text('Choisir une matière',
                             style: GoogleFonts.inter(fontSize: 13)),
                         decoration: InputDecoration(
@@ -801,7 +801,7 @@ class _GenerateQuizSheetState extends ConsumerState<_GenerateQuizSheet> {
                       loading: () => const LinearProgressIndicator(),
                       error: (_, __) => const Text('Erreur de chargement'),
                       data: (matieres) => DropdownButtonFormField<int?>(
-                        value: _selectedMatiereId,
+                        initialValue: _selectedMatiereId,
                         hint: Text('Auto (selon ta classe)',
                             style: GoogleFonts.inter(fontSize: 13)),
                         decoration: InputDecoration(

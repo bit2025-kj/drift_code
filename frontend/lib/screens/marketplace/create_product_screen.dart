@@ -187,7 +187,7 @@ class _CreateProductScreenState extends ConsumerState<CreateProductScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // Type selector
-            _SectionTitle('Type de contenu'),
+            const _SectionTitle('Type de contenu'),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -235,7 +235,7 @@ class _CreateProductScreenState extends ConsumerState<CreateProductScreen> {
             ),
 
             const SizedBox(height: 20),
-            _SectionTitle('Informations'),
+            const _SectionTitle('Informations'),
             const SizedBox(height: 10),
 
             TextFormField(
@@ -301,7 +301,7 @@ class _CreateProductScreenState extends ConsumerState<CreateProductScreen> {
             ),
 
             const SizedBox(height: 20),
-            _SectionTitle('Classification (optionnel)'),
+            const _SectionTitle('Classification (optionnel)'),
             const SizedBox(height: 10),
 
             // Matiere selector
@@ -309,7 +309,7 @@ class _CreateProductScreenState extends ConsumerState<CreateProductScreen> {
               loading: () => const SizedBox(),
               error: (_, __) => const SizedBox(),
               data: (matieres) => DropdownButtonFormField<int>(
-                value: _matiereId,
+                initialValue: _matiereId,
                 decoration: const InputDecoration(labelText: 'Matière'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Toutes')),
@@ -326,7 +326,7 @@ class _CreateProductScreenState extends ConsumerState<CreateProductScreen> {
               loading: () => const SizedBox(),
               error: (_, __) => const SizedBox(),
               data: (classes) => DropdownButtonFormField<int>(
-                value: _classeId,
+                initialValue: _classeId,
                 decoration: const InputDecoration(labelText: 'Classe'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Toutes')),
@@ -343,7 +343,7 @@ class _CreateProductScreenState extends ConsumerState<CreateProductScreen> {
             if (!_isPack) ...[
               Row(
                 children: [
-                  _SectionTitle('Fichiers & médias'),
+                  const _SectionTitle('Fichiers & médias'),
                   const Spacer(),
                   if (_isUploading)
                     const SizedBox(
@@ -409,7 +409,7 @@ class _CreateProductScreenState extends ConsumerState<CreateProductScreen> {
             if (_isPack) ...[
               Row(
                 children: [
-                  _SectionTitle('Éléments du pack'),
+                  const _SectionTitle('Éléments du pack'),
                   const Spacer(),
                   if (_isUploading)
                     const SizedBox(

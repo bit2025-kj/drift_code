@@ -15,7 +15,8 @@ void main() async {
     if (msg.contains('overflowed') || msg.contains('overflow')) {
       debugPrint('🚨 OVERFLOW — ${details.context?.toDescription() ?? ''}');
       debugPrint('   ↳ $msg');
-      debugPrint('   ↳ ${details.stack.toString().split('\n').take(4).join('\n   ↳ ')}');
+      debugPrint(
+          '   ↳ ${details.stack.toString().split('\n').take(4).join('\n   ↳ ')}');
     } else if (kDebugMode) {
       debugPrint('⚠️  Flutter error: $msg');
     }

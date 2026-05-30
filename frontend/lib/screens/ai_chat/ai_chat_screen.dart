@@ -314,7 +314,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     } catch (e) {
       setState(() => _isUploading = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Erreur lors du chargement du fichier'),
         backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
@@ -1190,18 +1190,18 @@ class _AiBubbleState extends State<_AiBubble> {
             child: Align(
               alignment: Alignment.centerRight,
               child: widget.isStreaming
-                  ? Row(
+                  ? const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
                           width: 10, height: 10,
                           child: CircularProgressIndicator(
                             strokeWidth: 1.5,
-                            color: const Color(0xFFADB5BD),
+                            color: Color(0xFFADB5BD),
                           ),
                         ),
-                        const SizedBox(width: 5),
-                        const Text(
+                        SizedBox(width: 5),
+                        Text(
                           'En cours...',
                           style: TextStyle(fontSize: 10, color: Color(0xFFADB5BD)),
                         ),

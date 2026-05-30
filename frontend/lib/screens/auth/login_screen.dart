@@ -129,8 +129,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Expanded(child: Divider()),
                     Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('ou', style: TextStyle(color: AppColors.textSecondary))),
                     Expanded(child: Divider()),
@@ -163,16 +163,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         Container(
           width: 48, height: 48,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+            gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primary]),
             borderRadius: BorderRadius.circular(14),
           ),
           child: const Center(child: Text('N', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 28))),
         ),
         const SizedBox(width: 12),
-        Column(
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Nafa Edu', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
+            Text('Nafa Edu', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
             Text('Révise. Apprends. Réussis.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           ],
         ),
